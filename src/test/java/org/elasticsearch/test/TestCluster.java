@@ -27,7 +27,6 @@ import com.google.common.collect.Iterators;
 import com.google.common.collect.Sets;
 import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.ElasticsearchIllegalStateException;
-import org.elasticsearch.Version;
 import org.elasticsearch.cache.recycler.CacheRecycler;
 import org.elasticsearch.cache.recycler.PageCacheRecyclerModule;
 import org.elasticsearch.client.Client;
@@ -358,17 +357,17 @@ public final class TestCluster implements Iterable<Client> {
         }
     }
 
-    private NodeAndClient buildNode(Settings settings, Version version) {
+    private NodeAndClient buildNode(Settings settings) {
         int ord = nextNodeId.getAndIncrement();
-        return buildNode(ord, random.nextLong(), settings, version);
+        return buildNode(ord, random.nextLong(), settings);
     }
 
     private NodeAndClient buildNode() {
         int ord = nextNodeId.getAndIncrement();
-        return buildNode(ord, random.nextLong(), null, Version.CURRENT);
+        return buildNode(ord, random.nextLong(), null);
     }
 
-    private NodeAndClient buildNode(int nodeId, long seed, Settings settings, Version version) {
+    private NodeAndClient buildNode(int nodeId, long seed, Settings settings) {
         ensureOpen();
         settings = getSettings(nodeId, seed, settings);
         String name = buildNodeName(nodeId);
@@ -377,7 +376,6 @@ public final class TestCluster implements Iterable<Client> {
                 .put(settings)
                 .put("name", name)
                 .put("discovery.id.seed", seed)
-                .put("tests.mock.version", version)
                 .build();
         Node node = nodeBuilder().settings(finalSettings).build();
         return new NodeAndClient(name, node, new RandomClientFactory());
@@ -688,7 +686,7 @@ public final class TestCluster implements Iterable<Client> {
             NodeAndClient nodeAndClient = nodes.get(buildNodeName);
             if (nodeAndClient == null) {
                 changed = true;
-                nodeAndClient = buildNode(i, sharedNodesSeeds[i], null, Version.CURRENT);
+                nodeAndClient = buildNode(i, sharedNodesSeeds[i], null);
                 nodeAndClient.node.start();
                 logger.info("Start Shared Node [{}] not shared", nodeAndClient.name);
             }
@@ -1003,32 +1001,21 @@ public final class TestCluster implements Iterable<Client> {
      * Starts a node with default settings and returns it's name.
      */
     public String startNode() {
-        return startNode(ImmutableSettings.EMPTY, Version.CURRENT);
-    }
-
-    /**
-     * Starts a node with default settings ad the specified version and returns it's name.
-     */
-    public String startNode(Version version) {
-        return startNode(ImmutableSettings.EMPTY, version);
+        return startNode(ImmutableSettings.EMPTY);
     }
 
     /**
      * Starts a node with the given settings builder and returns it's name.
      */
     public String startNode(Settings.Builder settings) {
-        return startNode(settings.build(), Version.CURRENT);
+        return startNode(settings.build());
     }
 
     /**
      * Starts a node with the given settings and returns it's name.
      */
     public String startNode(Settings settings) {
-        return startNode(settings, Version.CURRENT);
-    }
-
-    public String startNode(Settings settings, Version version) {
-        NodeAndClient buildNode = buildNode(settings, version);
+        NodeAndClient buildNode = buildNode(settings);
         buildNode.node().start();
         publishNode(buildNode);
         return buildNode.name;

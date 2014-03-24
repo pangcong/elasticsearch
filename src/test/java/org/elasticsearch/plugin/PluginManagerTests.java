@@ -47,7 +47,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
@@ -244,54 +244,21 @@ public class PluginManagerTests extends ElasticsearchIntegrationTest {
     /**
      * We are ignoring by default these tests as they require to have an internet access
      * To activate the test, use -Dtests.network=true
-     * We test regular form: username/reponame/version
-     * It should find it in download.elasticsearch.org service
      */
     @Test
     @Network
-    public void testInstallPluginWithElasticsearchDownloadService() throws IOException {
-        assumeTrue(isDownloadServiceWorking("http://download.elasticsearch.org/", "elasticsearch/ci-test.txt"));
+    public void testInstallPluginWithInternet() throws IOException {
+        // We test regular form: username/reponame/version
+        // It should find it in download.elasticsearch.org service
         singlePluginInstallAndRemove("elasticsearch/elasticsearch-transport-thrift/1.5.0", null);
-    }
 
-    /**
-     * We are ignoring by default these tests as they require to have an internet access
-     * To activate the test, use -Dtests.network=true
-     * We test regular form: groupId/artifactId/version
-     * It should find it in maven central service
-     */
-    @Test
-    @Network
-    public void testInstallPluginWithMavenCentral() throws IOException {
-        assumeTrue(isDownloadServiceWorking("http://search.maven.org/", "/"));
+        // We test regular form: groupId/artifactId/version
+        // It should find it in maven central service
         singlePluginInstallAndRemove("org.elasticsearch/elasticsearch-transport-thrift/1.5.0", null);
-    }
 
-    /**
-     * We are ignoring by default these tests as they require to have an internet access
-     * To activate the test, use -Dtests.network=true
-     * We test site plugins from github: userName/repoName
-     * It should find it on github
-     */
-    @Test
-    @Network
-    public void testInstallPluginWithGithub() throws IOException {
-        assumeTrue(isDownloadServiceWorking("https://github.com/", "/"));
+        // We test site plugins from github: userName/repoName
+        // It should find it on github
         singlePluginInstallAndRemove("elasticsearch/kibana", null);
-    }
-
-    private boolean isDownloadServiceWorking(String url, String resource) {
-        HttpClient client = new HttpClient(url);
-        try {
-            if (client.request(resource).errorCode() != 200) {
-                logger.warn("[{}{}] download service is not working. Disabling current test.", url, resource);
-                return false;
-            }
-            return true;
-        } catch (Throwable t) {
-            logger.warn("[{}{}] download service is not working. Disabling current test.", url, resource);
-        }
-        return false;
     }
 
     private void deletePluginsFolder() {

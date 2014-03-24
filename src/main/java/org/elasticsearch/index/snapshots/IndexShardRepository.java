@@ -60,13 +60,4 @@ public interface IndexShardRepository {
      */
     void restore(SnapshotId snapshotId, ShardId shardId, ShardId snapshotShardId, RecoveryStatus recoveryStatus);
 
-    /**
-     * Retrieve shard snapshot status for the stored snapshot
-     *
-     * @param snapshotId snapshot id
-     * @param shardId    shard id
-     * @return snapshot status
-     */
-    IndexShardSnapshotStatus snapshotStatus(SnapshotId snapshotId, ShardId shardId);
-
 }

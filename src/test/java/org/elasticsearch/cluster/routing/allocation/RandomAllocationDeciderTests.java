@@ -80,7 +80,7 @@ public class RandomAllocationDeciderTests extends ElasticsearchAllocationTestCas
 
         RoutingTable routingTable = routingTableBuilder.build();
         ClusterState clusterState = ClusterState.builder().metaData(metaData).routingTable(routingTable).build();
-        int numIters = scaledRandomIntBetween(10, 30);
+        int numIters = atLeast(20);
         int nodeIdCounter = 0;
         int atMostNodes = between(Math.max(1, maxNumReplicas), numIters);
         final boolean frequentNodes = randomBoolean();
@@ -90,7 +90,7 @@ public class RandomAllocationDeciderTests extends ElasticsearchAllocationTestCas
 
             if (clusterState.nodes().size() <= atMostNodes &&
                     (nodeIdCounter == 0 || (frequentNodes ? frequently() : rarely()))) {
-                int numNodes = between(1, 3);
+                int numNodes = atLeast(1);
                 for (int j = 0; j < numNodes; j++) {
                     logger.info("adding node [{}]", nodeIdCounter);
                     newNodesBuilder.put(newNode("NODE_" + (nodeIdCounter++)));

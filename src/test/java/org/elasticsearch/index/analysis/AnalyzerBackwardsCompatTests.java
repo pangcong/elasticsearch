@@ -24,7 +24,6 @@ import org.junit.Ignore;
 
 import java.io.IOException;
 
-import static com.carrotsearch.randomizedtesting.RandomizedTest.scaledRandomIntBetween;
 import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_VERSION_CREATED;
 
 /**
@@ -33,7 +32,7 @@ public class AnalyzerBackwardsCompatTests extends ElasticsearchTokenStreamTestCa
 
     @Ignore
     private void testNoStopwordsAfter(org.elasticsearch.Version noStopwordVersion, String type) throws IOException {
-        final int iters = scaledRandomIntBetween(10, 100);
+        final int iters = atLeast(10);
         org.elasticsearch.Version version = org.elasticsearch.Version.CURRENT;
         for (int i = 0; i < iters; i++) {
             ImmutableSettings.Builder builder = ImmutableSettings.settingsBuilder().put("index.analysis.filter.my_stop.type", "stop");

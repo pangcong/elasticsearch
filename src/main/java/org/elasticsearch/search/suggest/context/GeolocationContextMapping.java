@@ -210,13 +210,13 @@ public class GeolocationContextMapping extends ContextMapping {
                 // otherwise it's a list of locations
                 ArrayList<String> result = Lists.newArrayList();
                 while (token != Token.END_ARRAY) {
-                    result.add(GeoUtils.parseGeoPoint(parser).geohash());
+                    result.add(GeoPoint.parse(parser).geohash());
                 }
                 return result;
             }
         } else {
             // or a single location
-            return Collections.singleton(GeoUtils.parseGeoPoint(parser).geohash());
+            return Collections.singleton(GeoPoint.parse(parser).geohash());
         }
     } 
     
@@ -337,8 +337,8 @@ public class GeolocationContextMapping extends ContextMapping {
                         precision = new int[] { parsePrecision(parser) };
                     }
                 } else if (FIELD_VALUE.equals(fieldName)) {
-                    if(Double.isNaN(lon) && Double.isNaN(lat)) {
-                        point = GeoUtils.parseGeoPoint(parser);
+                    if(lat == Double.NaN && lon == Double.NaN) {
+                        point = GeoPoint.parse(parser);
                     } else {
                         throw new ElasticsearchParseException("only lat/lon or [" + FIELD_VALUE + "] is allowed");
                     }
@@ -348,7 +348,7 @@ public class GeolocationContextMapping extends ContextMapping {
             }
 
             if (point == null) {
-                if (Double.isNaN(lat) || Double.isNaN(lon)) {
+                if (lat == Double.NaN || lon == Double.NaN) {
                     throw new ElasticsearchParseException("location is missing");
                 } else {
                     point = new GeoPoint(lat, lon);
@@ -357,7 +357,7 @@ public class GeolocationContextMapping extends ContextMapping {
 
             return new GeoQuery(name, point.geohash(), precision);
         } else {
-            return new GeoQuery(name, GeoUtils.parseGeoPoint(parser).getGeohash(), precision);
+            return new GeoQuery(name, GeoPoint.parse(parser).getGeohash(), precision);
         }
     }
     

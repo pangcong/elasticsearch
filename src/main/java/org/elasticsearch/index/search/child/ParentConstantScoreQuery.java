@@ -46,7 +46,7 @@ import java.util.Set;
 public class ParentConstantScoreQuery extends Query {
 
     private final ParentChildIndexFieldData parentChildIndexFieldData;
-    private Query originalParentQuery;
+    private final Query originalParentQuery;
     private final String parentType;
     private final Filter childrenFilter;
 
@@ -76,16 +76,6 @@ public class ParentConstantScoreQuery extends Query {
     }
 
     @Override
-    public Query clone() {
-        ParentConstantScoreQuery q = (ParentConstantScoreQuery) super.clone();
-        q.originalParentQuery = originalParentQuery.clone();
-        if (q.rewrittenParentQuery != null) {
-            q.rewrittenParentQuery = rewrittenParentQuery.clone();
-        }
-        return q;
-    }
-
-    @Override
     public Weight createWeight(IndexSearcher searcher) throws IOException {
         SearchContext searchContext = SearchContext.current();
         BytesRefHash parentIds = new BytesRefHash(512, searchContext.bigArrays());
@@ -95,7 +85,7 @@ public class ParentConstantScoreQuery extends Query {
         if (rewrittenParentQuery != null) {
             parentQuery = rewrittenParentQuery;
         } else {
-            assert rewriteIndexReader == searcher.getIndexReader() : "not equal, rewriteIndexReader=" + rewriteIndexReader + " searcher.getIndexReader()=" + searcher.getIndexReader();
+            assert rewriteIndexReader == searcher.getIndexReader();
             parentQuery = rewrittenParentQuery = originalParentQuery.rewrite(searcher.getIndexReader());
         }
         IndexSearcher indexSearcher = new IndexSearcher(searcher.getIndexReader());

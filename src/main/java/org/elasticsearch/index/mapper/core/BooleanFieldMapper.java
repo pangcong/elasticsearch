@@ -207,23 +207,19 @@ public class BooleanFieldMapper extends AbstractFieldMapper<Boolean> {
         if (!fieldType().indexed() && !fieldType().stored()) {
             return;
         }
-
-        Boolean value = context.parseExternalValue(Boolean.class);
-        if (value == null) {
-            XContentParser.Token token = context.parser().currentToken();
-            if (token == XContentParser.Token.VALUE_NULL) {
-                if (nullValue != null) {
-                    value = nullValue;
-                }
-            } else {
-                value = context.parser().booleanValue();
+        XContentParser.Token token = context.parser().currentToken();
+        String value = null;
+        if (token == XContentParser.Token.VALUE_NULL) {
+            if (nullValue != null) {
+                value = nullValue ? "T" : "F";
             }
+        } else {
+            value = context.parser().booleanValue() ? "T" : "F";
         }
-
         if (value == null) {
             return;
         }
-        fields.add(new Field(names.indexName(), value ? "T" : "F", fieldType));
+        fields.add(new Field(names.indexName(), value, fieldType));
     }
 
     @Override

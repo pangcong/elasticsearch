@@ -28,8 +28,6 @@ import org.jboss.netty.buffer.ChannelBuffers;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.channels.GatheringByteChannel;
 
 /**
  * A bytes array reference that caches the hash code.
@@ -73,11 +71,6 @@ public class HashedBytesArray implements BytesReference {
     @Override
     public void writeTo(OutputStream os) throws IOException {
         os.write(bytes);
-    }
-
-    @Override
-    public void writeTo(GatheringByteChannel channel) throws IOException {
-        channel.write(ByteBuffer.wrap(bytes));
     }
 
     @Override

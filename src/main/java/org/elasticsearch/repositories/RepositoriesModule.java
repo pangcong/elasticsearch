@@ -21,7 +21,6 @@ package org.elasticsearch.repositories;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import org.elasticsearch.action.admin.cluster.snapshots.status.TransportNodesSnapshotsStatus;
 import org.elasticsearch.common.inject.AbstractModule;
 import org.elasticsearch.common.inject.Module;
 import org.elasticsearch.repositories.fs.FsRepository;
@@ -62,7 +61,6 @@ public class RepositoriesModule extends AbstractModule {
     protected void configure() {
         bind(RepositoriesService.class).asEagerSingleton();
         bind(SnapshotsService.class).asEagerSingleton();
-        bind(TransportNodesSnapshotsStatus.class).asEagerSingleton();
         bind(RestoreService.class).asEagerSingleton();
         bind(RepositoryTypesRegistry.class).toInstance(new RepositoryTypesRegistry(ImmutableMap.copyOf(repositoryTypes)));
     }

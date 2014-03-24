@@ -108,8 +108,6 @@ public class TransportNodesListGatewayStartedShards extends TransportNodesOperat
                 nodesList.add((NodeLocalGatewayStartedShards) resp);
             } else if (resp instanceof FailedNodeException) {
                 failures.add((FailedNodeException) resp);
-            } else {
-                logger.warn("unknown response type [{}], expected NodeLocalGatewayStartedShards or FailedNodeException", resp);
             }
         }
         return new NodesLocalGatewayStartedShards(clusterName, nodesList.toArray(new NodeLocalGatewayStartedShards[nodesList.size()]),

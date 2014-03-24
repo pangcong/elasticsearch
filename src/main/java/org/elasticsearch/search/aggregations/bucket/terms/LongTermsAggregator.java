@@ -23,7 +23,6 @@ import org.elasticsearch.common.lease.Releasables;
 import org.elasticsearch.index.fielddata.LongValues;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
-import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.bucket.BucketsAggregator;
 import org.elasticsearch.common.util.LongHash;
 import org.elasticsearch.search.aggregations.bucket.terms.support.BucketPriorityQueue;
@@ -40,11 +39,11 @@ import java.util.Collections;
 public class LongTermsAggregator extends BucketsAggregator {
 
     private final InternalOrder order;
-    protected final int requiredSize;
-    protected final int shardSize;
-    protected final long minDocCount;
-    protected final NumericValuesSource valuesSource;
-    protected final LongHash bucketOrds;
+    private final int requiredSize;
+    private final int shardSize;
+    private final long minDocCount;
+    private final NumericValuesSource valuesSource;
+    private final LongHash bucketOrds;
     private LongValues values;
 
     public LongTermsAggregator(String name, AggregatorFactories factories, NumericValuesSource valuesSource, long estimatedBucketCount,
@@ -84,7 +83,7 @@ public class LongTermsAggregator extends BucketsAggregator {
     }
 
     @Override
-    public InternalAggregation buildAggregation(long owningBucketOrdinal) {
+    public LongTerms buildAggregation(long owningBucketOrdinal) {
         assert owningBucketOrdinal == 0;
 
         if (minDocCount == 0 && (order != InternalOrder.COUNT_DESC || bucketOrds.size() < requiredSize)) {
@@ -131,7 +130,7 @@ public class LongTermsAggregator extends BucketsAggregator {
     }
 
     @Override
-    public InternalAggregation buildEmptyAggregation() {
+    public LongTerms buildEmptyAggregation() {
         return new LongTerms(name, order, valuesSource.formatter(), requiredSize, minDocCount, Collections.<InternalTerms.Bucket>emptyList());
     }
 

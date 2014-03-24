@@ -29,7 +29,6 @@ import org.elasticsearch.search.aggregations.bucket.range.RangeBuilder;
 import org.elasticsearch.search.aggregations.bucket.range.date.DateRangeBuilder;
 import org.elasticsearch.search.aggregations.bucket.range.geodistance.GeoDistanceBuilder;
 import org.elasticsearch.search.aggregations.bucket.range.ipv4.IPv4RangeBuilder;
-import org.elasticsearch.search.aggregations.bucket.significant.SignificantTermsBuilder;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsBuilder;
 import org.elasticsearch.search.aggregations.metrics.avg.AvgBuilder;
 import org.elasticsearch.search.aggregations.metrics.cardinality.CardinalityBuilder;
@@ -103,10 +102,6 @@ public class AggregationBuilders {
     
     public static GeoHashGridBuilder geohashGrid(String name) {
         return new GeoHashGridBuilder(name);
-    }
-
-    public static SignificantTermsBuilder significantTerms(String name) {
-        return new SignificantTermsBuilder(name);
     }
 
     public static DateHistogramBuilder dateHistogram(String name) {

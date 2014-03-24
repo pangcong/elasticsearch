@@ -22,7 +22,6 @@ import com.carrotsearch.hppc.ObjectArrayList;
 import com.carrotsearch.randomizedtesting.RandomizedContext;
 import com.carrotsearch.randomizedtesting.SeedUtils;
 import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
 import org.apache.lucene.util.AbstractRandomizedTest;
 import org.elasticsearch.ElasticsearchIllegalArgumentException;
 import org.elasticsearch.ExceptionsHelper;
@@ -59,7 +58,6 @@ import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.EsRejectedExecutionException;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.discovery.zen.elect.ElectMasterService;
 import org.elasticsearch.index.mapper.FieldMapper.Loading;
 import org.elasticsearch.index.merge.policy.*;
 import org.elasticsearch.index.merge.scheduler.ConcurrentMergeSchedulerProvider;
@@ -87,9 +85,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_NUMBER_OF_REPLICAS;
-import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_NUMBER_OF_SHARDS;
-import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilder;
+import static org.elasticsearch.cluster.metadata.IndexMetaData.*;
 import static org.elasticsearch.test.TestCluster.clusterName;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertNoFailures;
@@ -117,7 +113,8 @@ import static org.hamcrest.Matchers.equalTo;
  * <pre>
  *
  * @ClusterScope(scope=Scope.TEST) public class SomeIntegrationTest extends ElasticsearchIntegrationTest {
- * @Test public void testMethod() {}
+ * @Test
+ * public void testMethod() {}
  * }
  * </pre>
  * <p/>
@@ -131,7 +128,8 @@ import static org.hamcrest.Matchers.equalTo;
  *  <pre>
  * @ClusterScope(scope=Scope.SUITE, numNodes=3)
  * public class SomeIntegrationTest extends ElasticsearchIntegrationTest {
- * @Test public void testMethod() {}
+ * @Test
+ * public void testMethod() {}
  * }
  * </pre>
  * <p/>
@@ -168,19 +166,6 @@ public abstract class ElasticsearchIntegrationTest extends ElasticsearchTestCase
     public static final String INDEX_SEED_SETTING = "index.tests.seed";
 
     /**
-     * Threshold at which indexing switches from frequently async to frequently bulk.
-     */
-    private static final int FREQUENT_BULK_THRESHOLD = 300;
-    /**
-     * Maximum number of async operations that indexRandom will kick off at one time.
-     */
-    private static final int MAX_IN_FLIGHT_ASYNC_INDEXES = 150;
-    /**
-     * Maximum number of documents in a single bulk index request.
-     */
-    private static final int MAX_BULK_INDEX_REQUEST_SIZE = 1000;
-
-    /**
      * The current cluster depending on the configured {@link Scope}.
      * By default if no {@link ClusterScope} is configured this will hold a reference to the global cluster carried
      * on across test suites.
@@ -200,7 +185,7 @@ public abstract class ElasticsearchIntegrationTest extends ElasticsearchTestCase
             GLOBAL_CLUSTER = new TestCluster(masterSeed, clusterName("shared", ElasticsearchTestCase.CHILD_VM_ID, masterSeed));
         }
     }
-
+    
     @Before
     public final void before() throws IOException {
         assert Thread.getDefaultUncaughtExceptionHandler() instanceof ElasticsearchUncaughtExceptionHandler;
@@ -578,7 +563,6 @@ public abstract class ElasticsearchIntegrationTest extends ElasticsearchTestCase
         }
         Settings build = builder.build();
         if (!build.getAsMap().isEmpty()) {
-            logger.debug("allowNodes: updating [{}]'s setting to [{}]", index, build.toDelimitedString(';'));
             client().admin().indices().prepareUpdateSettings(index).setSettings(build).execute().actionGet();
         }
     }
@@ -625,16 +609,6 @@ public abstract class ElasticsearchIntegrationTest extends ElasticsearchTestCase
             assertThat(actionGet.getStatus(), equalTo(status));
         }
         return actionGet.getStatus();
-    }
-
-    /**
-     * Sets the cluster's minimum master node and make sure the response is acknowledge.
-     * Note: this doesn't guaranty the new settings is in effect, just that it has been received bu all nodes.
-     */
-    public void setMinimumMasterNodes(int n) {
-        assertTrue(client().admin().cluster().prepareUpdateSettings().setTransientSettings(
-                settingsBuilder().put(ElectMasterService.DISCOVERY_ZEN_MINIMUM_MASTER_NODES, n))
-                .get().isAcknowledged());
     }
 
     /**
@@ -756,7 +730,7 @@ public abstract class ElasticsearchIntegrationTest extends ElasticsearchTestCase
      */
     protected OptimizeResponse optimize() {
         waitForRelocation();
-        OptimizeResponse actionGet = client().admin().indices().prepareOptimize().setForce(randomBoolean()).execute().actionGet();
+        OptimizeResponse actionGet = client().admin().indices().prepareOptimize().execute().actionGet();
         assertNoFailures(actionGet);
         return actionGet;
     }
@@ -804,35 +778,49 @@ public abstract class ElasticsearchIntegrationTest extends ElasticsearchTestCase
         final String[] indices = indicesSet.toArray(new String[indicesSet.size()]);
         Collections.shuffle(builders, random);
         final CopyOnWriteArrayList<Tuple<IndexRequestBuilder, Throwable>> errors = new CopyOnWriteArrayList<Tuple<IndexRequestBuilder, Throwable>>();
-        List<CountDownLatch> inFlightAsyncOperations = new ArrayList<CountDownLatch>();
-        // If you are indexing just a few documents then frequently do it one at a time.  If many then frequently in bulk.
-        if (builders.size() < FREQUENT_BULK_THRESHOLD ? frequently() : rarely()) {
-            if (frequently()) {
-                logger.info("Index [{}] docs async: [{}] bulk: [{}]", builders.size(), true, false);
-                for (IndexRequestBuilder indexRequestBuilder : builders) {
-                    indexRequestBuilder.execute(new PayloadLatchedActionListener<IndexResponse, IndexRequestBuilder>(indexRequestBuilder, newLatch(inFlightAsyncOperations), errors));
-                    postIndexAsyncActions(indices, inFlightAsyncOperations);
+        List<CountDownLatch> latches = new ArrayList<CountDownLatch>();
+        if (frequently()) {
+            logger.info("Index [{}] docs async: [{}] bulk: [{}]", builders.size(), true, false);
+            final CountDownLatch latch = new CountDownLatch(builders.size());
+            latches.add(latch);
+            for (IndexRequestBuilder indexRequestBuilder : builders) {
+                indexRequestBuilder.execute(new PayloadLatchedActionListener<IndexResponse, IndexRequestBuilder>(indexRequestBuilder, latch, errors));
+                if (rarely()) {
+                    if (rarely()) {
+                        client().admin().indices().prepareRefresh(indices).setIndicesOptions(IndicesOptions.lenient()).execute(new LatchedActionListener<RefreshResponse>(newLatch(latches)));
+                    } else if (rarely()) {
+                        client().admin().indices().prepareFlush(indices).setIndicesOptions(IndicesOptions.lenient()).execute(new LatchedActionListener<FlushResponse>(newLatch(latches)));
+                    } else if (rarely()) {
+                        client().admin().indices().prepareOptimize(indices).setIndicesOptions(IndicesOptions.lenient()).setMaxNumSegments(between(1, 10)).setFlush(random.nextBoolean()).execute(new LatchedActionListener<OptimizeResponse>(newLatch(latches)));
+                    }
                 }
-            } else {
-                logger.info("Index [{}] docs async: [{}] bulk: [{}]", builders.size(), false, false);
-                for (IndexRequestBuilder indexRequestBuilder : builders) {
-                    indexRequestBuilder.execute().actionGet();
-                    postIndexAsyncActions(indices, inFlightAsyncOperations);
+            }
+
+        } else if (randomBoolean()) {
+            logger.info("Index [{}] docs async: [{}] bulk: [{}]", builders.size(), false, false);
+            for (IndexRequestBuilder indexRequestBuilder : builders) {
+                indexRequestBuilder.execute().actionGet();
+                if (rarely()) {
+                    if (rarely()) {
+                        client().admin().indices().prepareRefresh(indices).setIndicesOptions(IndicesOptions.lenient()).execute(new LatchedActionListener<RefreshResponse>(newLatch(latches)));
+                    } else if (rarely()) {
+                        client().admin().indices().prepareFlush(indices).setIndicesOptions(IndicesOptions.lenient()).execute(new LatchedActionListener<FlushResponse>(newLatch(latches)));
+                    } else if (rarely()) {
+                        client().admin().indices().prepareOptimize(indices).setIndicesOptions(IndicesOptions.lenient()).setMaxNumSegments(between(1, 10)).setFlush(random.nextBoolean()).execute(new LatchedActionListener<OptimizeResponse>(newLatch(latches)));
+                    }
                 }
             }
         } else {
             logger.info("Index [{}] docs async: [{}] bulk: [{}]", builders.size(), false, true);
-            for (List<IndexRequestBuilder> segmented : Lists.partition(builders, between(MAX_BULK_INDEX_REQUEST_SIZE / 2, MAX_BULK_INDEX_REQUEST_SIZE))) {
-                BulkRequestBuilder bulkBuilder = client().prepareBulk();
-                for (IndexRequestBuilder indexRequestBuilder : segmented) {
-                    bulkBuilder.add(indexRequestBuilder);
-                }
-                BulkResponse actionGet = bulkBuilder.execute().actionGet();
-                assertThat(actionGet.hasFailures() ? actionGet.buildFailureMessage() : "", actionGet.hasFailures(), equalTo(false));
+            BulkRequestBuilder bulkBuilder = client().prepareBulk();
+            for (IndexRequestBuilder indexRequestBuilder : builders) {
+                bulkBuilder.add(indexRequestBuilder);
             }
+            BulkResponse actionGet = bulkBuilder.execute().actionGet();
+            assertThat(actionGet.hasFailures() ? actionGet.buildFailureMessage() : "", actionGet.hasFailures(), equalTo(false));
         }
-        for (CountDownLatch operation: inFlightAsyncOperations) {
-            operation.await();
+        for (CountDownLatch countDownLatch : latches) {
+            countDownLatch.await();
         }
         final List<Throwable> actualErrors = new ArrayList<Throwable>();
         for (Tuple<IndexRequestBuilder, Throwable> tuple : errors) {
@@ -852,28 +840,6 @@ public abstract class ElasticsearchIntegrationTest extends ElasticsearchTestCase
         CountDownLatch l = new CountDownLatch(1);
         latches.add(l);
         return l;
-    }
-
-    /**
-     * Maybe refresh, optimize, or flush then always make sure there aren't too many in flight async operations. 
-     */
-    private void postIndexAsyncActions(String[] indices, List<CountDownLatch> inFlightAsyncOperations) throws InterruptedException {
-        if (rarely()) {
-            if (rarely()) {
-                client().admin().indices().prepareRefresh(indices).setIndicesOptions(IndicesOptions.lenient()).execute(
-                        new LatchedActionListener<RefreshResponse>(newLatch(inFlightAsyncOperations)));
-            } else if (rarely()) {
-                client().admin().indices().prepareFlush(indices).setIndicesOptions(IndicesOptions.lenient()).execute(
-                        new LatchedActionListener<FlushResponse>(newLatch(inFlightAsyncOperations)));
-            } else if (rarely()) {
-                client().admin().indices().prepareOptimize(indices).setIndicesOptions(IndicesOptions.lenient()).setMaxNumSegments(between(1, 10)).setFlush(randomBoolean()).execute(
-                        new LatchedActionListener<OptimizeResponse>(newLatch(inFlightAsyncOperations)));
-            }
-        }
-        while (inFlightAsyncOperations.size() > MAX_IN_FLIGHT_ASYNC_INDEXES) {
-            int waitFor = between(0, inFlightAsyncOperations.size() - 1);
-            inFlightAsyncOperations.remove(waitFor).await();
-        }
     }
 
     private class LatchedActionListener<Response> implements ActionListener<Response> {

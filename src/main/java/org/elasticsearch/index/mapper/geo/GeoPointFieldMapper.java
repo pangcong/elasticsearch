@@ -57,7 +57,9 @@ import java.util.Locale;
 import java.util.Map;
 
 import static org.elasticsearch.index.mapper.MapperBuilders.*;
-import static org.elasticsearch.index.mapper.core.TypeParsers.*;
+import static org.elasticsearch.index.mapper.core.TypeParsers.parseField;
+import static org.elasticsearch.index.mapper.core.TypeParsers.parseMultiField;
+import static org.elasticsearch.index.mapper.core.TypeParsers.parsePathType;
 
 /**
  * Parsing: We handle:
@@ -224,11 +226,7 @@ public class GeoPointFieldMapper extends AbstractFieldMapper<GeoPoint> implement
                 } else if (fieldName.equals("precision_step")) {
                     builder.precisionStep(XContentMapValues.nodeIntegerValue(fieldNode));
                 } else if (fieldName.equals("geohash_precision")) {
-                    if (fieldNode instanceof Integer) {
-                        builder.geoHashPrecision(XContentMapValues.nodeIntegerValue(fieldNode));
-                    } else {
-                        builder.geoHashPrecision(GeoUtils.geoHashLevelsForPrecision(fieldNode.toString()));
-                    }
+                    builder.geoHashPrecision(XContentMapValues.nodeIntegerValue(fieldNode));
                 } else if (fieldName.equals("validate")) {
                     builder.validateLat = XContentMapValues.nodeBooleanValue(fieldNode);
                     builder.validateLon = XContentMapValues.nodeBooleanValue(fieldNode);
@@ -454,10 +452,6 @@ public class GeoPointFieldMapper extends AbstractFieldMapper<GeoPoint> implement
         return this.geohashMapper;
     }
 
-    int geoHashPrecision() {
-        return geoHashPrecision;
-    }
-
     public boolean isEnableLatLon() {
         return enableLatLon;
     }
@@ -486,51 +480,89 @@ public class GeoPointFieldMapper extends AbstractFieldMapper<GeoPoint> implement
         context.path().pathType(pathType);
         context.path().add(name());
 
-        GeoPoint sparse = context.parseExternalValue(GeoPoint.class);
-        
-        if (sparse != null) {
-            parse(context, sparse, null);
-        } else {
-            sparse = new GeoPoint();
-            XContentParser.Token token = context.parser().currentToken();
+        XContentParser.Token token = context.parser().currentToken();
+        if (token == XContentParser.Token.START_ARRAY) {
+            token = context.parser().nextToken();
             if (token == XContentParser.Token.START_ARRAY) {
-                token = context.parser().nextToken();
-                if (token == XContentParser.Token.START_ARRAY) {
-                    // its an array of array of lon/lat [ [1.2, 1.3], [1.4, 1.5] ]
-                    while (token != XContentParser.Token.END_ARRAY) {
-                        parse(context, GeoUtils.parseGeoPoint(context.parser(), sparse), null);
-                        token = context.parser().nextToken();
-                    }
-                } else {
-                    // its an array of other possible values
-                    if (token == XContentParser.Token.VALUE_NUMBER) {
-                        double lon = context.parser().doubleValue();
-                        token = context.parser().nextToken();
-                        double lat = context.parser().doubleValue();
-                        while ((token = context.parser().nextToken()) != XContentParser.Token.END_ARRAY) {
+                // its an array of array of lon/lat [ [1.2, 1.3], [1.4, 1.5] ]
+                while (token != XContentParser.Token.END_ARRAY) {
+                    token = context.parser().nextToken();
+                    double lon = context.parser().doubleValue();
+                    token = context.parser().nextToken();
+                    double lat = context.parser().doubleValue();
+                    while ((token = context.parser().nextToken()) != XContentParser.Token.END_ARRAY) {
 
+                    }
+                    parseLatLon(context, lat, lon);
+                    token = context.parser().nextToken();
+                }
+            } else {
+                // its an array of other possible values
+                if (token == XContentParser.Token.VALUE_NUMBER) {
+                    double lon = context.parser().doubleValue();
+                    token = context.parser().nextToken();
+                    double lat = context.parser().doubleValue();
+                    while ((token = context.parser().nextToken()) != XContentParser.Token.END_ARRAY) {
+
+                    }
+                    parseLatLon(context, lat, lon);
+                } else {
+                    while (token != XContentParser.Token.END_ARRAY) {
+                        if (token == XContentParser.Token.START_OBJECT) {
+                            parseObjectLatLon(context);
+                        } else if (token == XContentParser.Token.VALUE_STRING) {
+                            parseStringLatLon(context);
                         }
-                        parse(context, sparse.reset(lat, lon), null);
-                    } else {
-                        while (token != XContentParser.Token.END_ARRAY) {
-                            if (token == XContentParser.Token.VALUE_STRING) {
-                                parsePointFromString(context, sparse, context.parser().text());
-                            } else {
-                                parse(context, GeoUtils.parseGeoPoint(context.parser(), sparse), null);
-                            }
-                            token = context.parser().nextToken();
-                        }
+                        token = context.parser().nextToken();
                     }
                 }
-            } else if (token == XContentParser.Token.VALUE_STRING) {
-                parsePointFromString(context, sparse, context.parser().text());
-            } else {
-                parse(context, GeoUtils.parseGeoPoint(context.parser(), sparse), null);
             }
+        } else if (token == XContentParser.Token.START_OBJECT) {
+            parseObjectLatLon(context);
+        } else if (token == XContentParser.Token.VALUE_STRING) {
+            parseStringLatLon(context);
         }
 
         context.path().remove();
         context.path().pathType(origPathType);
+    }
+
+    private void parseStringLatLon(ParseContext context) throws IOException {
+        String value = context.parser().text();
+        int comma = value.indexOf(',');
+        if (comma != -1) {
+            double lat = Double.parseDouble(value.substring(0, comma).trim());
+            double lon = Double.parseDouble(value.substring(comma + 1).trim());
+            parseLatLon(context, lat, lon);
+        } else { // geo hash
+            parseGeohash(context, value);
+        }
+    }
+
+    private void parseObjectLatLon(ParseContext context) throws IOException {
+        XContentParser.Token token;
+        String currentName = context.parser().currentName();
+        Double lat = null;
+        Double lon = null;
+        String geohash = null;
+        while ((token = context.parser().nextToken()) != XContentParser.Token.END_OBJECT) {
+            if (token == XContentParser.Token.FIELD_NAME) {
+                currentName = context.parser().currentName();
+            } else if (token.isValue()) {
+                if (currentName.equals(Names.LAT)) {
+                    lat = context.parser().doubleValue();
+                } else if (currentName.equals(Names.LON)) {
+                    lon = context.parser().doubleValue();
+                } else if (currentName.equals(Names.GEOHASH)) {
+                    geohash = context.parser().text();
+                }
+            }
+        }
+        if (geohash != null) {
+            parseGeohash(context, geohash);
+        } else if (lat != null && lon != null) {
+            parseLatLon(context, lat, lon);
+        }
     }
 
     private void parseGeohashField(ParseContext context, String geohash) throws IOException {
@@ -544,12 +576,13 @@ public class GeoPointFieldMapper extends AbstractFieldMapper<GeoPoint> implement
         }
     }
 
-    private void parsePointFromString(ParseContext context, GeoPoint sparse, String point) throws IOException {
-        if (point.indexOf(',') < 0) {
-            parse(context, sparse.resetFromGeoHash(point), point);
-        } else {
-            parse(context, sparse.resetFromString(point), null);
-        }
+    private void parseLatLon(ParseContext context, double lat, double lon) throws IOException {
+        parse(context, new GeoPoint(lat, lon), null);
+    }
+
+    private void parseGeohash(ParseContext context, String geohash) throws IOException {
+        GeoPoint point = GeoHashUtils.decode(geohash);
+        parse(context, point, geohash);
     }
 
     private void parse(ParseContext context, GeoPoint point, String geohash) throws IOException {

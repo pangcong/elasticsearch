@@ -196,7 +196,7 @@ public class SimpleQueryTests extends ElasticsearchIntegrationTest {
             assertSearchHit(searchHit, hasScore(1.0f));
         }
 
-        int num = scaledRandomIntBetween(100, 200);
+        int num = atLeast(100);
         IndexRequestBuilder[] builders = new IndexRequestBuilder[num];
         for (int i = 0; i < builders.length; i++) {
             builders[i] = client().prepareIndex("test", "type", "" + i).setSource("f", English.intToEnglish(i));
@@ -204,7 +204,7 @@ public class SimpleQueryTests extends ElasticsearchIntegrationTest {
         createIndex("test_1");
         indexRandom(true, builders);
         ensureYellow();
-        int queryRounds = scaledRandomIntBetween(10, 20);
+        int queryRounds = atLeast(10);
         for (int i = 0; i < queryRounds; i++) {
             MatchQueryBuilder matchQuery = matchQuery("f", English.intToEnglish(between(0, num)));
             searchResponse = client().prepareSearch("test_1").setQuery(matchQuery).setSize(num).get();
@@ -241,7 +241,7 @@ public class SimpleQueryTests extends ElasticsearchIntegrationTest {
         indexRandom(true, client().prepareIndex("test", "type1", "1").setSource("foo", "bar"),
                 client().prepareIndex("test", "type1", "2").setSource("foo", "bar")
         );
-        int iters = scaledRandomIntBetween(100, 200);
+        int iters = atLeast(100);
         for (int i = 0; i < iters; i++) {
             SearchResponse searchResponse = client().prepareSearch("test").setQuery(queryString("*:*^10.0").boost(10.0f)).get();
             assertHitCount(searchResponse, 2l);
@@ -356,7 +356,7 @@ public class SimpleQueryTests extends ElasticsearchIntegrationTest {
     @Test
     public void testOmitTermFreqsAndPositions() throws Exception {
         Version version = Version.CURRENT;
-        int iters = scaledRandomIntBetween(10, 20);
+        int iters = atLeast(10);
         for (int i = 0; i < iters; i++) {
             try {
                 // backwards compat test!
@@ -2290,16 +2290,6 @@ public class SimpleQueryTests extends ElasticsearchIntegrationTest {
                 .setQuery(matchQuery("meta", "a1234").analyzer("my_ngram_analyzer"))
                 .get(); // this one returns a hit since it's default operator is OR
         assertHitCount(searchResponse, 1l);
-    }
-
-    public void testMatchPhrasePrefixQuery() {
-        createIndex("test1");
-        client().prepareIndex("test1", "type1", "1").setSource("field", "Johnnie Walker Black Label").get();
-        refresh();
-
-        SearchResponse searchResponse = client().prepareSearch().setQuery(matchQuery("field", "Johnnie la").slop(between(2,5)).type(Type.PHRASE_PREFIX)).get();
-        assertHitCount(searchResponse, 1l);
-        assertSearchHits(searchResponse, "1");
     }
 
 }

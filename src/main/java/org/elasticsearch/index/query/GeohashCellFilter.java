@@ -217,12 +217,12 @@ public class GeohashCellFilter {
                             // A string indicates either a gehash or a lat/lon string
                             String location = parser.text();
                             if(location.indexOf(",")>0) {
-                                geohash = GeoUtils.parseGeoPoint(parser).geohash();
+                                geohash = GeoPoint.parse(parser).geohash();
                             } else {
                                 geohash = location;
                             }
                         } else {
-                            geohash = GeoUtils.parseGeoPoint(parser).geohash();
+                            geohash = GeoPoint.parse(parser).geohash();
                         }
                     }
                 } else {

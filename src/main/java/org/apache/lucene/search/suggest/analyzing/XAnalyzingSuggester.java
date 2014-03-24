@@ -579,7 +579,7 @@ public class XAnalyzingSuggester extends Lookup {
         analyzed.length += 2;
 
         Util.toIntsRef(analyzed, scratchInts);
-        //System.out.println("ADD: " + scratchInts + " -> " + cost + ": " + surface.utf8ToString());
+        //// System.out.println("ADD: " + scratchInts + " -> " + cost + ": " + surface.utf8ToString());
         if (!hasPayloads) {
           builder.add(scratchInts, outputs.newPair(cost, BytesRef.deepCopyOf(surface)));
         } else {
@@ -702,7 +702,7 @@ public class XAnalyzingSuggester extends Lookup {
       return Collections.emptyList();
     }
 
-    //System.out.println("lookup key=" + key + " num=" + num);
+   // System.outout.println("lookup key=" + key + " num=" + num);
     for (int i = 0; i < key.length(); i++) {
       if (key.charAt(i) == holeCharacter) {
         throw new IllegalArgumentException("lookup key cannot contain HOLE character U+001E; this character is reserved");
@@ -718,13 +718,12 @@ public class XAnalyzingSuggester extends Lookup {
 
       final CharsRef spare = new CharsRef();
 
-      //System.out.println("  now intersect exactFirst=" + exactFirst);
+  // System.outem.out.println("  now intersect exactFirst=" + exactFirst);
     
       // Intersect automaton w/ suggest wFST and get all
       // prefix starting nodes & their outputs:
       //final PathIntersector intersector = getPathIntersector(lookupAutomaton, fst);
-
-      //System.out.println("  prefixPaths: " + prefixPaths.size());
+// System.outystem.out.println("  prefixPaths: " + prefixPaths.size());
 
       BytesReader bytesReader = fst.getBytesReader();
 
@@ -839,9 +838,7 @@ public class XAnalyzingSuggester extends Lookup {
         LookupResult result = getLookupResult(completion.output.output1, completion.output.output2, spare);
 
         // TODO: for fuzzy case would be nice to return
-        // how many edits were required
-
-        //System.out.println("    result=" + result);
+        // how many edits were required// System.out//System.out.println("    result=" + result);
         results.add(result);
 
         if (results.size() == num) {

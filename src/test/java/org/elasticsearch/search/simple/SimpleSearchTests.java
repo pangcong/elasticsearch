@@ -33,7 +33,9 @@ import java.util.concurrent.ExecutionException;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 import static org.elasticsearch.index.query.QueryBuilders.rangeQuery;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.*;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertHitCount;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertNoFailures;
 
 public class SimpleSearchTests extends ElasticsearchIntegrationTest {
 
@@ -64,7 +66,7 @@ public class SimpleSearchTests extends ElasticsearchIntegrationTest {
                 client().prepareIndex("test", "type", "5").setSource("field", "value"),
                 client().prepareIndex("test", "type", "6").setSource("field", "value"));
 
-        int iters = scaledRandomIntBetween(10, 20);
+        int iters = atLeast(10);
         for (int i = 0; i < iters; i++) {
             // id is not indexed, but lets see that we automatically convert to
             SearchResponse searchResponse = client().prepareSearch().setQuery(QueryBuilders.matchAllQuery()).setPreference(randomUnicodeOfLengthBetween(0, 4)).get();

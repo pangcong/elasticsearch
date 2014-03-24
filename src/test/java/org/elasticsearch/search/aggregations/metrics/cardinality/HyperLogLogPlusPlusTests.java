@@ -33,7 +33,7 @@ public class HyperLogLogPlusPlusTests extends ElasticsearchTestCase {
 
     @Test
     public void encodeDecode() {
-        final int iters = scaledRandomIntBetween(100000, 500000);
+        final int iters = atLeast(100000);
         // random hashes
         for (int i = 0; i < iters; ++i) {
             final int p1 = randomIntBetween(4, 24);

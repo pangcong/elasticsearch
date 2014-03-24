@@ -280,37 +280,26 @@ public class IndexGatewayTests extends ElasticsearchIntegrationTest {
         logger.info("--> refreshing and checking count");
         client().admin().indices().prepareRefresh().execute().actionGet();
         assertThat(client().prepareCount().setQuery(matchAllQuery()).execute().actionGet().getCount(), equalTo(0l));
-        long numDocs = between(100, rarely() ? 2000 : 1000);
-        logger.info("--> indexing " + numDocs + "  docs");
-        boolean hasSnapshoted = false;
-        boolean hasFlushed = false;
-        for (long i = 0; i < numDocs; i++) {
+
+        logger.info("--> indexing 1234 docs");
+        for (long i = 0; i < 1234; i++) {
             client().prepareIndex("test", "type1", Long.toString(i))
                     .setCreate(true) // make sure we use create, so if we recover wrongly, we will get increments...
                     .setSource(MapBuilder.<String, Object>newMapBuilder().put("test", "value" + i).map()).execute().actionGet();
 
-             // snapshot every 100 so we get some actions going on in the gateway
-            if (rarely()) {
-                hasSnapshoted = true;
+            // snapshot every 100 so we get some actions going on in the gateway 
+            if ((i % 11) == 0) {
                 client().admin().indices().prepareGatewaySnapshot().execute().actionGet();
             }
             // flush every once is a while, so we get different data
-            if (rarely()) {
-                hasFlushed = true;
+            if ((i % 55) == 0) {
                 client().admin().indices().prepareFlush().execute().actionGet();
             }
-        }
-        if (!hasSnapshoted) {
-            client().admin().indices().prepareGatewaySnapshot().execute().actionGet();
-        }
-
-        if (!hasFlushed)  {
-            client().admin().indices().prepareFlush().execute().actionGet();
         }
 
         logger.info("--> refreshing and checking count");
         client().admin().indices().prepareRefresh().execute().actionGet();
-        assertThat(client().prepareCount().setQuery(matchAllQuery()).execute().actionGet().getCount(), equalTo(numDocs));
+        assertThat(client().prepareCount().setQuery(matchAllQuery()).execute().actionGet().getCount(), equalTo(1234l));
 
 
         logger.info("--> closing the server");
@@ -330,7 +319,7 @@ public class IndexGatewayTests extends ElasticsearchIntegrationTest {
         assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.YELLOW));
 
         logger.info("--> checking count");
-        assertThat(client().prepareCount().setQuery(matchAllQuery()).execute().actionGet().getCount(), equalTo(numDocs));
+        assertThat(client().prepareCount().setQuery(matchAllQuery()).execute().actionGet().getCount(), equalTo(1234l));
 
         logger.info("--> checking reuse / recovery status");
         IndicesStatusResponse statusResponse = client().admin().indices().prepareStatus().setRecovery(true).execute().actionGet();

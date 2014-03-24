@@ -19,13 +19,11 @@
 
 package org.elasticsearch.index.translog.fs;
 
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.translog.Translog;
 import org.elasticsearch.index.translog.TranslogException;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -49,7 +47,6 @@ public class BufferingFsTranslogFile implements FsTranslogFile {
 
     private byte[] buffer;
     private int bufferCount;
-    private WrapperOutputStream bufferOs = new WrapperOutputStream();
 
     public BufferingFsTranslogFile(ShardId shardId, long id, RafReference raf, int bufferSize) throws IOException {
         this.shardId = shardId;
@@ -72,26 +69,27 @@ public class BufferingFsTranslogFile implements FsTranslogFile {
     }
 
     @Override
-    public Translog.Location add(BytesReference data) throws IOException {
+    public Translog.Location add(byte[] data, int from, int size) throws IOException {
         rwl.writeLock().lock();
         try {
             operationCounter++;
             long position = lastPosition;
-            if (data.length() >= buffer.length) {
+            if (size >= buffer.length) {
                 flushBuffer();
                 // we use the channel to write, since on windows, writing to the RAF might not be reflected
                 // when reading through the channel
-                data.writeTo(raf.channel());
-                lastWrittenPosition += data.length();
-                lastPosition += data.length();
-                return new Translog.Location(id, position, data.length());
+                raf.channel().write(ByteBuffer.wrap(data, from, size));
+                lastWrittenPosition += size;
+                lastPosition += size;
+                return new Translog.Location(id, position, size);
             }
-            if (data.length() > buffer.length - bufferCount) {
+            if (size > buffer.length - bufferCount) {
                 flushBuffer();
             }
-            data.writeTo(bufferOs);
-            lastPosition += data.length();
-            return new Translog.Location(id, position, data.length());
+            System.arraycopy(data, from, buffer, bufferCount, size);
+            bufferCount += size;
+            lastPosition += size;
+            return new Translog.Location(id, position, size);
         } finally {
             rwl.writeLock().unlock();
         }
@@ -211,21 +209,6 @@ public class BufferingFsTranslogFile implements FsTranslogFile {
             throw new TranslogException(shardId, "failed to flush", e);
         } finally {
             rwl.writeLock().unlock();
-        }
-    }
-
-    class WrapperOutputStream extends OutputStream {
-
-        @Override
-        public void write(int b) throws IOException {
-            buffer[bufferCount++] = (byte) b;
-        }
-
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
-            // we do safety checked when we decide to use this stream...
-            System.arraycopy(b, off, buffer, bufferCount, len);
-            bufferCount += len;
         }
     }
 }

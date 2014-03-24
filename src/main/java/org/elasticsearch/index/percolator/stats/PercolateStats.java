@@ -18,7 +18,6 @@
  */
 package org.elasticsearch.index.percolator.stats;
 
-import org.elasticsearch.Version;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
@@ -38,7 +37,7 @@ public class PercolateStats implements Streamable, ToXContent {
     private long percolateCount;
     private long percolateTimeInMillis;
     private long current;
-    private long memorySizeInBytes = -1;
+    private long memorySizeInBytes;
     private long numQueries;
 
     /**
@@ -91,9 +90,7 @@ public class PercolateStats implements Streamable, ToXContent {
     }
 
     /**
-     * @return Temporarily returns <code>-1</code>, but this used to return the total size the loaded queries take in
-     * memory, but this is disabled now because the size estimation was too expensive cpu wise. This will be enabled
-     * again when a cheaper size estimation can be found.
+     * @return The total size the loaded queries take in memory.
      */
     public long getMemorySizeInBytes() {
         return memorySizeInBytes;
@@ -127,6 +124,7 @@ public class PercolateStats implements Streamable, ToXContent {
         percolateCount += percolate.getCount();
         percolateTimeInMillis += percolate.getTimeInMillis();
         current += percolate.getCurrent();
+        memorySizeInBytes += percolate.getMemorySizeInBytes();
         numQueries += percolate.getNumQueries();
     }
 
@@ -152,11 +150,7 @@ public class PercolateStats implements Streamable, ToXContent {
         percolateCount = in.readVLong();
         percolateTimeInMillis = in.readVLong();
         current = in.readVLong();
-        if (in.getVersion().before(Version.V_1_1_0)) {
-            in.readVLong();
-        } else {
-            in.readLong();
-        }
+        memorySizeInBytes = in.readVLong();
         numQueries = in.readVLong();
     }
 
@@ -165,11 +159,7 @@ public class PercolateStats implements Streamable, ToXContent {
         out.writeVLong(percolateCount);
         out.writeVLong(percolateTimeInMillis);
         out.writeVLong(current);
-        if (out.getVersion().before(Version.V_1_1_0)) {
-            out.writeVLong(0);
-        } else {
-            out.writeLong(-1);
-        }
+        out.writeVLong(memorySizeInBytes);
         out.writeVLong(numQueries);
     }
 }

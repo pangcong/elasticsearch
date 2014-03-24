@@ -19,7 +19,6 @@
 
 package org.elasticsearch.test;
 
-import com.carrotsearch.randomizedtesting.RandomizedTest;
 import com.carrotsearch.randomizedtesting.annotations.*;
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope.Scope;
 import org.apache.lucene.codecs.Codec;
@@ -48,9 +47,5 @@ public abstract class ElasticsearchLuceneTestCase extends LuceneTestCase {
      */
     public static void forceDefaultCodec() {
         Codec.setDefault(DEFAULT_CODEC);
-    }
-
-    public static int scaledRandomIntBetween(int min, int max) {
-        return RandomizedTest.scaledRandomIntBetween(min, max);
     }
 }

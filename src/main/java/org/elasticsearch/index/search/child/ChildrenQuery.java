@@ -63,7 +63,7 @@ public class ChildrenQuery extends Query {
     private final String childType;
     private final Filter parentFilter;
     private final ScoreType scoreType;
-    private Query originalChildQuery;
+    private final Query originalChildQuery;
     private final int shortCircuitParentDocSet;
     private final Filter nonNestedDocsFilter;
 
@@ -130,16 +130,6 @@ public class ChildrenQuery extends Query {
     }
 
     @Override
-    public Query clone() {
-        ChildrenQuery q = (ChildrenQuery) super.clone();
-        q.originalChildQuery = originalChildQuery.clone();
-        if (q.rewrittenChildQuery != null) {
-            q.rewrittenChildQuery = rewrittenChildQuery.clone();
-        }
-        return q;
-    }
-
-    @Override
     public void extractTerms(Set<Term> terms) {
         rewrittenChildQuery.extractTerms(terms);
     }
@@ -147,11 +137,12 @@ public class ChildrenQuery extends Query {
     @Override
     public Weight createWeight(IndexSearcher searcher) throws IOException {
         SearchContext searchContext = SearchContext.current();
+
         final Query childQuery;
         if (rewrittenChildQuery == null) {
             childQuery = rewrittenChildQuery = searcher.rewrite(originalChildQuery);
         } else {
-            assert rewriteIndexReader == searcher.getIndexReader() : "not equal, rewriteIndexReader=" + rewriteIndexReader + " searcher.getIndexReader()=" + searcher.getIndexReader();
+            assert rewriteIndexReader == searcher.getIndexReader();
             childQuery = rewrittenChildQuery;
         }
         IndexSearcher indexSearcher = new IndexSearcher(searcher.getIndexReader());
@@ -163,36 +154,27 @@ public class ChildrenQuery extends Query {
         switch (scoreType) {
             case MAX:
                 MaxCollector maxCollector = new MaxCollector(parentChildIndexFieldData, parentType, searchContext);
-                try {
-                    indexSearcher.search(childQuery, maxCollector);
-                    parentIds = maxCollector.parentIds;
-                    scores = maxCollector.scores;
-                    occurrences = null;
-                } finally {
-                    Releasables.release(maxCollector.parentIdsIndex);
-                }
+                indexSearcher.search(childQuery, maxCollector);
+                parentIds = maxCollector.parentIds;
+                scores = maxCollector.scores;
+                occurrences = null;
+                Releasables.release(maxCollector.parentIdsIndex);
                 break;
             case SUM:
                 SumCollector sumCollector = new SumCollector(parentChildIndexFieldData, parentType, searchContext);
-                try {
-                    indexSearcher.search(childQuery, sumCollector);
-                    parentIds = sumCollector.parentIds;
-                    scores = sumCollector.scores;
-                    occurrences = null;
-                } finally {
-                    Releasables.release(sumCollector.parentIdsIndex);
-                }
+                indexSearcher.search(childQuery, sumCollector);
+                parentIds = sumCollector.parentIds;
+                scores = sumCollector.scores;
+                occurrences = null;
+                Releasables.release(sumCollector.parentIdsIndex);
                 break;
             case AVG:
                 AvgCollector avgCollector = new AvgCollector(parentChildIndexFieldData, parentType, searchContext);
-                try {
-                    indexSearcher.search(childQuery, avgCollector);
-                    parentIds = avgCollector.parentIds;
-                    scores = avgCollector.scores;
-                    occurrences = avgCollector.occurrences;
-                } finally {
-                    Releasables.release(avgCollector.parentIdsIndex);
-                }
+                indexSearcher.search(childQuery, avgCollector);
+                parentIds = avgCollector.parentIds;
+                scores = avgCollector.scores;
+                occurrences = avgCollector.occurrences;
+                Releasables.release(avgCollector.parentIdsIndex);
                 break;
             default:
                 throw new RuntimeException("Are we missing a score type here? -- " + scoreType);

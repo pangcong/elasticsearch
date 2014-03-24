@@ -21,7 +21,6 @@ package org.elasticsearch.indices.warmer;
 
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 import com.google.common.collect.ImmutableList;
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.segments.IndexSegments;
 import org.elasticsearch.action.admin.indices.segments.IndexShardSegments;
 import org.elasticsearch.action.admin.indices.segments.IndicesSegmentResponse;
@@ -271,14 +270,14 @@ public class SimpleIndicesWarmerTests extends ElasticsearchIntegrationTest {
     private enum LoadingMethod {
         LAZY {
             @Override
-            CreateIndexRequestBuilder createIndex(String indexName, String type, String fieldName) {
-                return client().admin().indices().prepareCreate(indexName).setSettings(ImmutableSettings.builder().put(SINGLE_SHARD_NO_REPLICA).put(SearchService.NORMS_LOADING_KEY, Loading.LAZY_VALUE));
+            void createIndex(String indexName, String type, String fieldName) {
+                client().admin().indices().prepareCreate(indexName).setSettings(ImmutableSettings.builder().put(SINGLE_SHARD_NO_REPLICA).put(SearchService.NORMS_LOADING_KEY, Loading.LAZY_VALUE)).execute().actionGet();
             }
         },
         EAGER {
             @Override
-            CreateIndexRequestBuilder createIndex(String indexName, String type, String fieldName) {
-                return client().admin().indices().prepareCreate(indexName).setSettings(ImmutableSettings.builder().put(SINGLE_SHARD_NO_REPLICA).put(SearchService.NORMS_LOADING_KEY, Loading.EAGER_VALUE));
+            void createIndex(String indexName, String type, String fieldName) {
+                client().admin().indices().prepareCreate(indexName).setSettings(ImmutableSettings.builder().put(SINGLE_SHARD_NO_REPLICA).put(SearchService.NORMS_LOADING_KEY, Loading.EAGER_VALUE)).execute().actionGet();
             }
             @Override
             boolean isLazy() {
@@ -287,8 +286,8 @@ public class SimpleIndicesWarmerTests extends ElasticsearchIntegrationTest {
         },
         EAGER_PER_FIELD {
             @Override
-            CreateIndexRequestBuilder createIndex(String indexName, String type, String fieldName) throws Exception {
-                return client().admin().indices().prepareCreate(indexName).setSettings(ImmutableSettings.builder().put(SINGLE_SHARD_NO_REPLICA).put(SearchService.NORMS_LOADING_KEY, Loading.LAZY_VALUE)).addMapping(type, JsonXContent.contentBuilder()
+            void createIndex(String indexName, String type, String fieldName) throws Exception {
+                client().admin().indices().prepareCreate(indexName).setSettings(ImmutableSettings.builder().put(SINGLE_SHARD_NO_REPLICA).put(SearchService.NORMS_LOADING_KEY, Loading.LAZY_VALUE)).addMapping(type, JsonXContent.contentBuilder()
                         .startObject()
                         .startObject(type)
                             .startObject("properties")
@@ -301,7 +300,7 @@ public class SimpleIndicesWarmerTests extends ElasticsearchIntegrationTest {
                             .endObject()
                         .endObject()
                         .endObject()
-                        );
+                        ).execute().actionGet();
             }
             @Override
             boolean isLazy() {
@@ -309,19 +308,17 @@ public class SimpleIndicesWarmerTests extends ElasticsearchIntegrationTest {
             }
         };
         private static Settings SINGLE_SHARD_NO_REPLICA = ImmutableSettings.builder().put("number_of_shards", 1).put("number_of_replicas", 0).build();
-        abstract CreateIndexRequestBuilder createIndex(String indexName, String type, String fieldName) throws Exception;
+        abstract void createIndex(String indexName, String type, String fieldName) throws Exception;
         boolean isLazy() {
             return true;
         }
     }
-
     public void testEagerLoading() throws Exception {
         for (LoadingMethod method : LoadingMethod.values()) {
             logger.debug("METHOD " + method);
             String indexName = method.name().toLowerCase(Locale.ROOT);
-            assertAcked(method.createIndex(indexName, "t", "foo"));
+            method.createIndex(indexName, "t", "foo");
             client().prepareIndex(indexName, "t", "1").setSource("foo", "bar").setRefresh(true).execute().actionGet();
-            ensureGreen(indexName);
             long memoryUsage0 = getSegmentsMemoryUsage(indexName);
             // queries load norms if they were not loaded before
             client().prepareSearch(indexName).setQuery(QueryBuilders.matchQuery("foo", "bar")).execute().actionGet();

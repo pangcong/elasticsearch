@@ -69,7 +69,7 @@ public class MoreLikeThisActionTests extends ElasticsearchIntegrationTest {
     @Test
     public void testSimpleMoreLikeOnLongField() throws Exception {
         logger.info("Creating index test");
-        assertAcked(prepareCreate("test").addMapping("type1", "some_long", "type=long"));
+        createIndex("test");
         logger.info("Running Cluster Health");
         assertThat(ensureGreen(), equalTo(ClusterHealthStatus.GREEN));
 

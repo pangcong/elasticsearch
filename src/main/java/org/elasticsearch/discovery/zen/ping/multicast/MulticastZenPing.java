@@ -19,7 +19,6 @@
 
 package org.elasticsearch.discovery.zen.ping.multicast;
 
-import org.apache.lucene.util.Constants;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.ElasticsearchIllegalStateException;
 import org.elasticsearch.ExceptionsHelper;
@@ -27,11 +26,9 @@ import org.elasticsearch.Version;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
-import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.io.stream.*;
-import org.elasticsearch.common.network.MulticastChannel;
 import org.elasticsearch.common.network.NetworkService;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
@@ -46,7 +43,7 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.*;
 
 import java.io.IOException;
-import java.net.SocketAddress;
+import java.net.*;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
@@ -56,6 +53,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.elasticsearch.cluster.node.DiscoveryNode.readNode;
 import static org.elasticsearch.common.settings.ImmutableSettings.Builder.EMPTY_SETTINGS;
 import static org.elasticsearch.common.util.concurrent.ConcurrentCollections.newConcurrentMap;
+import static org.elasticsearch.common.util.concurrent.EsExecutors.daemonThreadFactory;
 
 /**
  *
@@ -79,10 +77,17 @@ public class MulticastZenPing extends AbstractLifecycleComponent<ZenPing> implem
 
     private final boolean pingEnabled;
 
-    private volatile MulticastChannel multicastChannel;
+    private volatile Receiver receiver;
+    private volatile Thread receiverThread;
+    private volatile MulticastSocket multicastSocket;
+    private DatagramPacket datagramPacketSend;
+    private DatagramPacket datagramPacketReceive;
 
     private final AtomicInteger pingIdGenerator = new AtomicInteger();
     private final Map<Integer, ConcurrentMap<DiscoveryNode, PingResponse>> receivedResponses = newConcurrentMap();
+
+    private final Object sendMutex = new Object();
+    private final Object receiveMutex = new Object();
 
     public MulticastZenPing(ThreadPool threadPool, TransportService transportService, ClusterName clusterName, Version version) {
         this(EMPTY_SETTINGS, threadPool, transportService, clusterName, new NetworkService(EMPTY_SETTINGS), version);
@@ -120,26 +125,71 @@ public class MulticastZenPing extends AbstractLifecycleComponent<ZenPing> implem
     @Override
     protected void doStart() throws ElasticsearchException {
         try {
-            // we know OSX has bugs in the JVM when creating multiple instances of multicast sockets
-            // causing for "socket close" exceptions when receive and/or crashes
-            boolean shared = componentSettings.getAsBoolean("shared", Constants.MAC_OS_X);
-            multicastChannel = MulticastChannel.getChannel(nodeName(), shared,
-                    new MulticastChannel.Config(port, group, bufferSize, ttl, networkService.resolvePublishHostAddress(address)),
-                    new Receiver());
-        } catch (Throwable t) {
+            this.datagramPacketReceive = new DatagramPacket(new byte[bufferSize], bufferSize);
+            this.datagramPacketSend = new DatagramPacket(new byte[bufferSize], bufferSize, InetAddress.getByName(group), port);
+        } catch (Exception e) {
+            logger.warn("disabled, failed to setup multicast (datagram) discovery : {}", e.getMessage());
             if (logger.isDebugEnabled()) {
-                logger.debug("multicast failed to start [{}], disabling", t, ExceptionsHelper.detailedMessage(t));
-            } else {
-                logger.info("multicast failed to start [{}], disabling", ExceptionsHelper.detailedMessage(t));
+                logger.debug("disabled, failed to setup multicast (datagram) discovery", e);
+            }
+            return;
+        }
+
+        InetAddress multicastInterface = null;
+        try {
+            MulticastSocket multicastSocket;
+//            if (NetworkUtils.canBindToMcastAddress()) {
+//                try {
+//                    multicastSocket = new MulticastSocket(new InetSocketAddress(group, port));
+//                } catch (Exception e) {
+//                    logger.debug("Failed to create multicast socket by binding to group address, binding to port", e);
+//                    multicastSocket = new MulticastSocket(port);
+//                }
+//            } else {
+            multicastSocket = new MulticastSocket(port);
+//            }
+
+            multicastSocket.setTimeToLive(ttl);
+
+            // set the send interface
+            multicastInterface = networkService.resolvePublishHostAddress(address);
+            multicastSocket.setInterface(multicastInterface);
+            multicastSocket.joinGroup(InetAddress.getByName(group));
+
+            multicastSocket.setReceiveBufferSize(bufferSize);
+            multicastSocket.setSendBufferSize(bufferSize);
+            multicastSocket.setSoTimeout(60000);
+
+            this.multicastSocket = multicastSocket;
+
+            this.receiver = new Receiver();
+            this.receiverThread = daemonThreadFactory(settings, "discovery#multicast#receiver").newThread(receiver);
+            this.receiverThread.start();
+        } catch (Exception e) {
+            datagramPacketReceive = null;
+            datagramPacketSend = null;
+            if (multicastSocket != null) {
+                multicastSocket.close();
+                multicastSocket = null;
+            }
+            logger.warn("disabled, failed to setup multicast discovery on port [{}], [{}]: {}", port, multicastInterface, e.getMessage());
+            if (logger.isDebugEnabled()) {
+                logger.debug("disabled, failed to setup multicast discovery on {}", e, multicastInterface);
             }
         }
     }
 
     @Override
     protected void doStop() throws ElasticsearchException {
-        if (multicastChannel != null) {
-            multicastChannel.close();
-            multicastChannel = null;
+        if (receiver != null) {
+            receiver.stop();
+        }
+        if (receiverThread != null) {
+            receiverThread.interrupt();
+        }
+        if (multicastSocket != null) {
+            multicastSocket.close();
+            multicastSocket = null;
         }
     }
 
@@ -207,27 +257,33 @@ public class MulticastZenPing extends AbstractLifecycleComponent<ZenPing> implem
     }
 
     private void sendPingRequest(int id) {
-        try {
-            BytesStreamOutput bStream = new BytesStreamOutput();
-            StreamOutput out = new HandlesStreamOutput(bStream);
-            out.writeBytes(INTERNAL_HEADER);
-            Version.writeVersion(version, out);
-            out.writeInt(id);
-            clusterName.writeTo(out);
-            nodesProvider.nodes().localNode().writeTo(out);
-            out.close();
-            multicastChannel.send(bStream.bytes());
-            if (logger.isTraceEnabled()) {
-                logger.trace("[{}] sending ping request", id);
-            }
-        } catch (Exception e) {
-            if (lifecycle.stoppedOrClosed()) {
-                return;
-            }
-            if (logger.isDebugEnabled()) {
-                logger.debug("failed to send multicast ping request", e);
-            } else {
-                logger.warn("failed to send multicast ping request: {}", ExceptionsHelper.detailedMessage(e));
+        if (multicastSocket == null) {
+            return;
+        }
+        synchronized (sendMutex) {
+            try {
+                BytesStreamOutput bStream = new BytesStreamOutput();
+                StreamOutput out = new HandlesStreamOutput(bStream);
+                out.writeBytes(INTERNAL_HEADER);
+                Version.writeVersion(version, out);
+                out.writeInt(id);
+                clusterName.writeTo(out);
+                nodesProvider.nodes().localNode().writeTo(out);
+                out.close();
+                datagramPacketSend.setData(bStream.bytes().toBytes());
+                multicastSocket.send(datagramPacketSend);
+                if (logger.isTraceEnabled()) {
+                    logger.trace("[{}] sending ping request", id);
+                }
+            } catch (Exception e) {
+                if (lifecycle.stoppedOrClosed()) {
+                    return;
+                }
+                if (logger.isDebugEnabled()) {
+                    logger.debug("failed to send multicast ping request", e);
+                } else {
+                    logger.warn("failed to send multicast ping request: {}", ExceptionsHelper.detailedMessage(e));
+                }
             }
         }
     }
@@ -286,58 +342,97 @@ public class MulticastZenPing extends AbstractLifecycleComponent<ZenPing> implem
     }
 
 
-    private class Receiver implements MulticastChannel.Listener {
+    private class Receiver implements Runnable {
+
+        private volatile boolean running = true;
+
+        public void stop() {
+            running = false;
+        }
 
         @Override
-        public void onMessage(BytesReference data, SocketAddress address) {
-            int id = -1;
-            DiscoveryNode requestingNodeX = null;
-            ClusterName clusterName = null;
+        public void run() {
+            while (running) {
+                try {
+                    int id = -1;
+                    DiscoveryNode requestingNodeX = null;
+                    ClusterName clusterName = null;
 
-            Map<String, Object> externalPingData = null;
-            XContentType xContentType = null;
+                    Map<String, Object> externalPingData = null;
+                    XContentType xContentType = null;
 
-            try {
-                boolean internal = false;
-                if (data.length() > 4) {
-                    int counter = 0;
-                    for (; counter < INTERNAL_HEADER.length; counter++) {
-                        if (data.get(counter) != INTERNAL_HEADER[counter]) {
-                            break;
+                    synchronized (receiveMutex) {
+                        try {
+                            multicastSocket.receive(datagramPacketReceive);
+                        } catch (SocketTimeoutException ignore) {
+                            continue;
+                        } catch (Exception e) {
+                            if (running) {
+                                if (multicastSocket.isClosed()) {
+                                    logger.warn("multicast socket closed while running, restarting...");
+                                    // for some reason, the socket got closed on us while we are still running
+                                    // make a best effort in trying to start the multicast socket again...
+                                    threadPool.generic().execute(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            MulticastZenPing.this.stop();
+                                            MulticastZenPing.this.start();
+                                        }
+                                    });
+                                    running = false;
+                                    return;
+                                } else {
+                                    logger.warn("failed to receive packet, throttling...", e);
+                                    Thread.sleep(500);
+                                }
+                            }
+                            continue;
+                        }
+                        try {
+                            boolean internal = false;
+                            if (datagramPacketReceive.getLength() > 4) {
+                                int counter = 0;
+                                for (; counter < INTERNAL_HEADER.length; counter++) {
+                                    if (datagramPacketReceive.getData()[datagramPacketReceive.getOffset() + counter] != INTERNAL_HEADER[counter]) {
+                                        break;
+                                    }
+                                }
+                                if (counter == INTERNAL_HEADER.length) {
+                                    internal = true;
+                                }
+                            }
+                            if (internal) {
+                                StreamInput input = CachedStreamInput.cachedHandles(new BytesStreamInput(datagramPacketReceive.getData(), datagramPacketReceive.getOffset() + INTERNAL_HEADER.length, datagramPacketReceive.getLength(), true));
+                                Version version = Version.readVersion(input);
+                                input.setVersion(version);
+                                id = input.readInt();
+                                clusterName = ClusterName.readClusterName(input);
+                                requestingNodeX = readNode(input);
+                            } else {
+                                xContentType = XContentFactory.xContentType(datagramPacketReceive.getData(), datagramPacketReceive.getOffset(), datagramPacketReceive.getLength());
+                                if (xContentType != null) {
+                                    // an external ping
+                                    externalPingData = XContentFactory.xContent(xContentType)
+                                            .createParser(datagramPacketReceive.getData(), datagramPacketReceive.getOffset(), datagramPacketReceive.getLength())
+                                            .mapAndClose();
+                                } else {
+                                    throw new ElasticsearchIllegalStateException("failed multicast message, probably message from previous version");
+                                }
+                            }
+                        } catch (Exception e) {
+                            logger.warn("failed to read requesting data from {}", e, datagramPacketReceive.getSocketAddress());
+                            continue;
                         }
                     }
-                    if (counter == INTERNAL_HEADER.length) {
-                        internal = true;
-                    }
-                }
-                if (internal) {
-                    StreamInput input = CachedStreamInput.cachedHandles(new BytesStreamInput(new BytesArray(data.toBytes(), INTERNAL_HEADER.length, data.length() - INTERNAL_HEADER.length)));
-                    Version version = Version.readVersion(input);
-                    input.setVersion(version);
-                    id = input.readInt();
-                    clusterName = ClusterName.readClusterName(input);
-                    requestingNodeX = readNode(input);
-                } else {
-                    xContentType = XContentFactory.xContentType(data);
-                    if (xContentType != null) {
-                        // an external ping
-                        externalPingData = XContentFactory.xContent(xContentType)
-                                .createParser(data)
-                                .mapAndClose();
+                    if (externalPingData != null) {
+                        handleExternalPingRequest(externalPingData, xContentType, datagramPacketReceive.getSocketAddress());
                     } else {
-                        throw new ElasticsearchIllegalStateException("failed multicast message, probably message from previous version");
+                        handleNodePingRequest(id, requestingNodeX, clusterName);
                     }
-                }
-                if (externalPingData != null) {
-                    handleExternalPingRequest(externalPingData, xContentType, address);
-                } else {
-                    handleNodePingRequest(id, requestingNodeX, clusterName);
-                }
-            } catch (Exception e) {
-                if (!lifecycle.started() || (e instanceof EsRejectedExecutionException)) {
-                    logger.debug("failed to read requesting data from {}", e, address);
-                } else {
-                    logger.warn("failed to read requesting data from {}", e, address);
+                } catch (Exception e) {
+                    if (running) {
+                        logger.warn("unexpected exception in multicast receiver", e);
+                    }
                 }
             }
         }
@@ -350,7 +445,7 @@ public class MulticastZenPing extends AbstractLifecycleComponent<ZenPing> implem
                 return;
             }
 
-            if (multicastChannel == null) {
+            if (multicastSocket == null) {
                 logger.debug("can't send ping response, no socket, from {}, content {}", remoteAddress, externalPingData);
                 return;
             }
@@ -397,9 +492,13 @@ public class MulticastZenPing extends AbstractLifecycleComponent<ZenPing> implem
                 builder.endObject();
 
                 builder.endObject().endObject();
-                multicastChannel.send(builder.bytes());
-                if (logger.isTraceEnabled()) {
-                    logger.trace("sending external ping response {}", builder.string());
+                synchronized (sendMutex) {
+                    BytesReference bytes = builder.bytes();
+                    datagramPacketSend.setData(bytes.array(), bytes.arrayOffset(), bytes.length());
+                    multicastSocket.send(datagramPacketSend);
+                    if (logger.isTraceEnabled()) {
+                        logger.trace("sending external ping response {}", builder.string());
+                    }
                 }
             } catch (Exception e) {
                 logger.warn("failed to send external multicast response", e);
@@ -452,9 +551,7 @@ public class MulticastZenPing extends AbstractLifecycleComponent<ZenPing> implem
                                 }
                             });
                         } catch (Exception e) {
-                            if (lifecycle.started()) {
-                                logger.warn("failed to connect to requesting node {}", e, requestingNode);
-                            }
+                            logger.warn("failed to connect to requesting node {}", e, requestingNode);
                         }
                     }
                 });
@@ -462,9 +559,7 @@ public class MulticastZenPing extends AbstractLifecycleComponent<ZenPing> implem
                 transportService.sendRequest(requestingNode, MulticastPingResponseRequestHandler.ACTION, multicastPingResponse, new EmptyTransportResponseHandler(ThreadPool.Names.SAME) {
                     @Override
                     public void handleException(TransportException exp) {
-                        if (lifecycle.started()) {
-                            logger.warn("failed to receive confirmation on sent ping response to [{}]", exp, requestingNode);
-                        }
+                        logger.warn("failed to receive confirmation on sent ping response to [{}]", exp, requestingNode);
                     }
                 });
             }

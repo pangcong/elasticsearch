@@ -18,7 +18,6 @@
  */
 package org.elasticsearch.index.mapper.geo;
 
-import com.spatial4j.core.shape.Shape;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.index.FieldInfo;
@@ -225,15 +224,11 @@ public class GeoShapeFieldMapper extends AbstractFieldMapper<String> {
     @Override
     public void parse(ParseContext context) throws IOException {
         try {
-            Shape shape = context.parseExternalValue(Shape.class);
+            ShapeBuilder shape = ShapeBuilder.parse(context.parser());
             if (shape == null) {
-                ShapeBuilder shapeBuilder = ShapeBuilder.parse(context.parser());
-                if (shapeBuilder == null) {
-                    return;
-                }
-                shape = shapeBuilder.build();
+                return;
             }
-            Field[] fields = defaultStrategy.createIndexableFields(shape);
+            Field[] fields = defaultStrategy.createIndexableFields(shape.build());
             if (fields == null || fields.length == 0) {
                 return;
             }

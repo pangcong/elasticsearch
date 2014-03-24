@@ -64,7 +64,7 @@ public class MultiMatchQueryTests extends ElasticsearchIntegrationTest {
         );
         assertAcked(builder.addMapping("test", createMapping()));
         ensureGreen();
-        int numDocs = scaledRandomIntBetween(50, 100);
+        int numDocs = atLeast(50);
         List<IndexRequestBuilder> builders = new ArrayList<IndexRequestBuilder>();
         builders.add(client().prepareIndex("test", "test", "theone").setSource(
                 "full_name", "Captain America",
@@ -275,7 +275,7 @@ public class MultiMatchQueryTests extends ElasticsearchIntegrationTest {
 
         final int numDocs = (int) client().prepareCount("test")
                 .setQuery(matchAllQuery()).get().getCount();
-        int numIters = scaledRandomIntBetween(5, 10);
+        int numIters = atLeast(5);
         for (int i = 0; i < numIters; i++) {
             {
                 MatchQueryBuilder.Type type = randomBoolean() ? null : MatchQueryBuilder.Type.BOOLEAN;

@@ -22,7 +22,6 @@ package org.elasticsearch.index.snapshots.blobstore;
 import com.google.common.collect.ImmutableList;
 import org.elasticsearch.ElasticsearchParseException;
 import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -270,38 +269,21 @@ public class BlobStoreIndexShardSnapshot {
 
     private final long indexVersion;
 
-    private final long startTime;
-
-    private final long time;
-
-    private final int numberOfFiles;
-
-    private final long totalSize;
-
     private final ImmutableList<FileInfo> indexFiles;
 
     /**
      * Constructs new shard snapshot metadata from snapshot metadata
      *
-     * @param snapshot      snapshot id
-     * @param indexVersion  index version
-     * @param indexFiles    list of files in the shard
-     * @param startTime     snapshot start time
-     * @param time          snapshot running time
-     * @param numberOfFiles number of files that where snapshotted
-     * @param totalSize     total size of all files snapshotted
+     * @param snapshot     snapshot id
+     * @param indexVersion index version
+     * @param indexFiles   list of files in the shard
      */
-    public BlobStoreIndexShardSnapshot(String snapshot, long indexVersion, List<FileInfo> indexFiles, long startTime, long time,
-                                       int numberOfFiles, long totalSize) {
+    public BlobStoreIndexShardSnapshot(String snapshot, long indexVersion, List<FileInfo> indexFiles) {
         assert snapshot != null;
         assert indexVersion >= 0;
         this.snapshot = snapshot;
         this.indexVersion = indexVersion;
         this.indexFiles = ImmutableList.copyOf(indexFiles);
-        this.startTime = startTime;
-        this.time = time;
-        this.numberOfFiles = numberOfFiles;
-        this.totalSize = totalSize;
     }
 
     /**
@@ -332,55 +314,6 @@ public class BlobStoreIndexShardSnapshot {
     }
 
     /**
-     * Returns snapshot start time
-     */
-    public long startTime() {
-        return startTime;
-    }
-
-    /**
-     * Returns snapshot running time
-     */
-    public long time() {
-        return time;
-    }
-
-    /**
-     * Returns number of files that where snapshotted
-     */
-    public int numberOfFiles() {
-        return numberOfFiles;
-    }
-
-    /**
-     * Returns total size of all files that where snapshotted
-     */
-    public long totalSize() {
-        return totalSize;
-    }
-
-    static final class Fields {
-        static final XContentBuilderString NAME = new XContentBuilderString("name");
-        static final XContentBuilderString INDEX_VERSION = new XContentBuilderString("index_version");
-        static final XContentBuilderString START_TIME = new XContentBuilderString("start_time");
-        static final XContentBuilderString TIME = new XContentBuilderString("time");
-        static final XContentBuilderString NUMBER_OF_FILES = new XContentBuilderString("number_of_files");
-        static final XContentBuilderString TOTAL_SIZE = new XContentBuilderString("total_size");
-        static final XContentBuilderString FILES = new XContentBuilderString("files");
-    }
-
-    static final class ParseFields {
-        static final ParseField NAME = new ParseField("name");
-        static final ParseField INDEX_VERSION = new ParseField("index_version", "index-version");
-        static final ParseField START_TIME = new ParseField("start_time");
-        static final ParseField TIME = new ParseField("time");
-        static final ParseField NUMBER_OF_FILES = new ParseField("number_of_files");
-        static final ParseField TOTAL_SIZE = new ParseField("total_size");
-        static final ParseField FILES = new ParseField("files");
-    }
-
-
-    /**
      * Serializes shard snapshot metadata info into JSON
      *
      * @param snapshot shard snapshot metadata
@@ -390,13 +323,9 @@ public class BlobStoreIndexShardSnapshot {
      */
     public static void toXContent(BlobStoreIndexShardSnapshot snapshot, XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
-        builder.field(Fields.NAME, snapshot.snapshot);
-        builder.field(Fields.INDEX_VERSION, snapshot.indexVersion);
-        builder.field(Fields.START_TIME, snapshot.startTime);
-        builder.field(Fields.TIME, snapshot.time);
-        builder.field(Fields.NUMBER_OF_FILES, snapshot.numberOfFiles);
-        builder.field(Fields.TOTAL_SIZE, snapshot.totalSize);
-        builder.startArray(Fields.FILES);
+        builder.field("name", snapshot.snapshot);
+        builder.field("index-version", snapshot.indexVersion);
+        builder.startArray("files");
         for (FileInfo fileInfo : snapshot.indexFiles) {
             FileInfo.toXContent(fileInfo, builder, params);
         }
@@ -415,10 +344,6 @@ public class BlobStoreIndexShardSnapshot {
 
         String snapshot = null;
         long indexVersion = -1;
-        long startTime = 0;
-        long time = 0;
-        int numberOfFiles = 0;
-        long totalSize = 0;
 
         List<FileInfo> indexFiles = newArrayList();
 
@@ -429,29 +354,16 @@ public class BlobStoreIndexShardSnapshot {
                     String currentFieldName = parser.currentName();
                     token = parser.nextToken();
                     if (token.isValue()) {
-                        if (ParseFields.NAME.match(currentFieldName)) {
+                        if ("name".equals(currentFieldName)) {
                             snapshot = parser.text();
-                        } else if (ParseFields.INDEX_VERSION.match(currentFieldName)) {
-                            // The index-version is needed for backward compatibility with v 1.0
+                        } else if ("index-version".equals(currentFieldName)) {
                             indexVersion = parser.longValue();
-                        } else if (ParseFields.START_TIME.match(currentFieldName)) {
-                            startTime = parser.longValue();
-                        } else if (ParseFields.TIME.match(currentFieldName)) {
-                            time = parser.longValue();
-                        } else if (ParseFields.NUMBER_OF_FILES.match(currentFieldName)) {
-                            numberOfFiles = parser.intValue();
-                        } else if (ParseFields.TOTAL_SIZE.match(currentFieldName)) {
-                            totalSize = parser.longValue();
                         } else {
                             throw new ElasticsearchParseException("unknown parameter [" + currentFieldName + "]");
                         }
                     } else if (token == XContentParser.Token.START_ARRAY) {
-                        if (ParseFields.FILES.match(currentFieldName)) {
-                            while ((parser.nextToken()) != XContentParser.Token.END_ARRAY) {
-                                indexFiles.add(FileInfo.fromXContent(parser));
-                            }
-                        } else {
-                            throw new ElasticsearchParseException("unknown parameter [" + currentFieldName + "]");
+                        while ((parser.nextToken()) != XContentParser.Token.END_ARRAY) {
+                            indexFiles.add(FileInfo.fromXContent(parser));
                         }
                     } else {
                         throw new ElasticsearchParseException("unexpected token  [" + token + "]");
@@ -461,8 +373,7 @@ public class BlobStoreIndexShardSnapshot {
                 }
             }
         }
-        return new BlobStoreIndexShardSnapshot(snapshot, indexVersion, ImmutableList.<FileInfo>copyOf(indexFiles),
-                startTime, time, numberOfFiles, totalSize);
+        return new BlobStoreIndexShardSnapshot(snapshot, indexVersion, ImmutableList.<FileInfo>copyOf(indexFiles));
     }
 
     /**

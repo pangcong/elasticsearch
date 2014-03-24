@@ -113,19 +113,19 @@ public class GeoBoundingBoxFilterParser implements FilterParser {
                             right = parser.doubleValue();
                         } else {
                             if (TOP_LEFT.equals(currentFieldName) || TOPLEFT.equals(currentFieldName)) {
-                                GeoUtils.parseGeoPoint(parser, sparse);
+                                GeoPoint.parse(parser, sparse);
                                 top = sparse.getLat();
                                 left = sparse.getLon();
                             } else if (BOTTOM_RIGHT.equals(currentFieldName) || BOTTOMRIGHT.equals(currentFieldName)) {
-                                GeoUtils.parseGeoPoint(parser, sparse);
+                                GeoPoint.parse(parser, sparse);
                                 bottom = sparse.getLat();
                                 right = sparse.getLon();
                             } else if (TOP_RIGHT.equals(currentFieldName) || TOPRIGHT.equals(currentFieldName)) {
-                                GeoUtils.parseGeoPoint(parser, sparse);
+                                GeoPoint.parse(parser, sparse);
                                 top = sparse.getLat();
                                 right = sparse.getLon();
                             } else if (BOTTOM_LEFT.equals(currentFieldName) || BOTTOMLEFT.equals(currentFieldName)) {
-                                GeoUtils.parseGeoPoint(parser, sparse);
+                                GeoPoint.parse(parser, sparse);
                                 bottom = sparse.getLat();
                                 left = sparse.getLon();
                             } else {

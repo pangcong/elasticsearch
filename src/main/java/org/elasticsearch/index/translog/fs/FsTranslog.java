@@ -349,15 +349,17 @@ public class FsTranslog extends AbstractIndexShardComponent implements Translog 
             // seek back to end
             out.seek(size);
 
-            BytesReference bytes = out.bytes();
-            Location location = current.add(bytes);
+            BytesReference ref = out.bytes();
+            byte[] refBytes = ref.array();
+            int refBytesOffset = ref.arrayOffset();
+            Location location = current.add(refBytes, refBytesOffset, size);
             if (syncOnEachOperation) {
                 current.sync();
             }
             FsTranslogFile trans = this.trans;
             if (trans != null) {
                 try {
-                    location = trans.add(bytes);
+                    location = trans.add(refBytes, refBytesOffset, size);
                 } catch (ClosedChannelException e) {
                     // ignore
                 }

@@ -46,8 +46,7 @@ public class CircuitBreakerServiceTests extends ElasticsearchIntegrationTest {
 
     private String randomRidiculouslySmallLimit() {
         // 3 different ways to say 100 bytes
-        return randomFrom(Arrays.asList("100b", "100"));
-         //, (10000. / JvmInfo.jvmInfo().getMem().getHeapMax().bytes()) + "%")); // this is prone to rounding errors and will fail if JVM memory changes!
+        return randomFrom(Arrays.asList("100b", "100", (10000. / JvmInfo.jvmInfo().getMem().getHeapMax().bytes()) + "%"));
     }
 
     @Test
@@ -58,7 +57,7 @@ public class CircuitBreakerServiceTests extends ElasticsearchIntegrationTest {
 
         try {
             // index some different terms so we have some field data for loading
-            int docCount = scaledRandomIntBetween(300, 1000);
+            int docCount = atLeast(300);
             for (long id = 0; id < docCount; id++) {
                 client.prepareIndex("cb-test", "type", Long.toString(id))
                         .setSource(MapBuilder.<String, Object>newMapBuilder().put("test", "value" + id).map()).execute().actionGet();
@@ -109,7 +108,7 @@ public class CircuitBreakerServiceTests extends ElasticsearchIntegrationTest {
             client.admin().cluster().prepareHealth("ramtest").setWaitForGreenStatus().setTimeout("10s").execute().actionGet();
 
             // index some different terms so we have some field data for loading
-            int docCount = scaledRandomIntBetween(300, 1000);
+            int docCount = atLeast(300);
             for (long id = 0; id < docCount; id++) {
                 client.prepareIndex("ramtest", "type", Long.toString(id))
                         .setSource(MapBuilder.<String, Object>newMapBuilder().put("test", "value" + id).map()).execute().actionGet();

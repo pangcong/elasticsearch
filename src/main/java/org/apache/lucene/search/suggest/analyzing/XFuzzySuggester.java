@@ -194,7 +194,7 @@ public final class XFuzzySuggester extends XAnalyzingSuggester {
       Writer w = new OutputStreamWriter(new FileOutputStream("out.dot"), "UTF-8");
       w.write(levA.toDot());
       w.close();
-      System.out.println("Wrote LevA to out.dot");
+      // System.out.println("Wrote LevA to out.dot");
     */
         return FSTUtil.intersectPrefixPaths(levA, fst);
     }
