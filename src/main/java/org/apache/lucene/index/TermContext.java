@@ -19,8 +19,11 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 import java.util.Arrays;
-
+import java.nio.*;
+import java.util.Set;
+import org.apache.lucene.document.Document;
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.index.fieldvisitor.AllFieldsVisitor;
 
 /**
  * Maintains a {@link IndexReader} {@link TermState} view over
@@ -92,9 +95,22 @@ public final class TermContext {
         final Terms terms = fields.terms(field);
         if (terms != null) {
           final TermsEnum termsEnum = terms.iterator(null);
+
           if (termsEnum.seekExact(bytes)) { 
             final TermState termState = termsEnum.termState();
+            termState.distance = -20;
             //if (DEBUG) System.out.println("    found");
+            int length = termsEnum.term().length/4;
+            FloatBuffer feature = ByteBuffer.wrap(termsEnum.term().bytes).asFloatBuffer();
+            FloatBuffer searchFeature = ByteBuffer.wrap(bytes.bytes).asFloatBuffer();
+            float distance = 0;
+            for(int i = 0; i < length; i++)
+            {
+                distance += (feature.get(i) - searchFeature.get(i))*(feature.get(i) - searchFeature.get(i));
+            }
+            if(distance > 10 )
+                continue;
+            termState.distance = distance;
             perReaderTermState.register(termState, ctx.ord, termsEnum.docFreq(), termsEnum.totalTermFreq());
           }
         }

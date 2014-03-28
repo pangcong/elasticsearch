@@ -615,6 +615,9 @@ public class IndexSearcher {
         // continue with the following leaf
         continue;
       }
+
+      ((TopScoreDocCollector)collector).setTermValue(((TermQuery) ((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).delegate.getQuery()).getTerm().bytes());
+      ((TopScoreDocCollector)collector).setContext(readerContext);
       Scorer scorer = weight.scorer(ctx, !collector.acceptsDocsOutOfOrder(), true, ctx.reader().getLiveDocs());
       if (scorer != null) {
         try {
@@ -681,7 +684,8 @@ public class IndexSearcher {
    */
   public Weight createNormalizedWeight(Query query) throws IOException {
     query = rewrite(query);
-    Weight weight = query.createWeight(this);
+    org.apache.lucene.search.ConstantScoreQuery constQuery = new org.apache.lucene.search.ConstantScoreQuery(query);
+    Weight weight = constQuery.createWeight(this);
     float v = weight.getValueForNormalization();
     float norm = getSimilarity().queryNorm(v);
     if (Float.isInfinite(norm) || Float.isNaN(norm)) {

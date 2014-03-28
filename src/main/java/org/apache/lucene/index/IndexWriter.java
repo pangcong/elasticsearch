@@ -2207,7 +2207,7 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
         merge.abort();
         mergeFinish(merge);
       }
-      pendingMerges.clear()v;
+      pendingMerges.clear();
 
       for (final MergePolicy.OneMerge merge : runningMerges) {
         if (infoStream.isEnabled("IW")) {

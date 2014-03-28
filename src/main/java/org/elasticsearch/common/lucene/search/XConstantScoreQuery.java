@@ -21,17 +21,32 @@ package org.elasticsearch.common.lucene.search;
 
 import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.Filter;
-
+import org.apache.lucene.search.FilteredQuery;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.FilteredQuery.FilterStrategy;
 /**
  * We still need sometimes to exclude deletes, because we don't remove them always with acceptDocs on filters
  */
 public class XConstantScoreQuery extends ConstantScoreQuery {
 
     private final Filter actualFilter;
+    private final FilteredQuery delegate;
+    private final FilterStrategy strategy;
+
+    public XConstantScoreQuery(Filter filter, Query query) {
+        super(new ApplyAcceptedDocsFilter(filter));
+        this.actualFilter = filter;
+        this.strategy = FilteredQuery.RANDOM_ACCESS_FILTER_STRATEGY;
+        this.delegate = new FilteredQuery(query, new ApplyAcceptedDocsFilter(filter), strategy);
+
+    }
 
     public XConstantScoreQuery(Filter filter) {
         super(new ApplyAcceptedDocsFilter(filter));
         this.actualFilter = filter;
+        this.strategy = FilteredQuery.RANDOM_ACCESS_FILTER_STRATEGY;
+        this.delegate = null;
+
     }
 
     // trick so any external systems still think that its the actual filter we use, and not the

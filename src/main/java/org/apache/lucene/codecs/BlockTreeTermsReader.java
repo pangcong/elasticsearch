@@ -1725,7 +1725,8 @@ public class BlockTreeTermsReader extends FieldsProducer {
 
             currentFrame.loadBlock();
 
-            final SeekStatus result = currentFrame.scanToTerm(target, true);            
+            final SeekStatus result = currentFrame.scanToTerm(target, true);
+
             if (result == SeekStatus.FOUND) {
               // if (DEBUG) {
               //   System.out.println("  return FOUND term=" + term.utf8ToString() + " " + term);

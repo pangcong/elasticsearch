@@ -18,9 +18,16 @@ package org.apache.lucene.search;
  */
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 
 import org.apache.lucene.index.AtomicReaderContext;
-
+import org.apache.lucene.index.CompositeReaderContext;
+import org.apache.lucene.index.IndexReaderContext;
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.index.fieldvisitor.AllFieldsVisitor;
+import org.apache.commons.codec.binary.Base64;
 /**
  * A {@link Collector} implementation that collects the top-scoring hits,
  * returning them as a {@link TopDocs}. This is used by {@link IndexSearcher} to
@@ -45,6 +52,54 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     @Override
     public void collect(int doc) throws IOException {
       float score = scorer.score();
+
+       org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new AllFieldsVisitor();
+        try {
+            context.reader().document(doc + docBase, visitor);
+        } catch (Exception e) {
+            //logger.("failed to collect doc", e);
+            return;
+        }
+
+       String[] parts = visitor.source().toUtf8().split("\"");
+      //  BASE64Decoder decoder = new BASE64Decoder();
+      //  byte[] decodedBytes = decoder.decodeBuffer(parts[2]);
+        byte[] feature = Base64.decodeBase64(parts[3]);
+
+        byte[] target = Base64.decodeBase64(termValue.bytes);
+
+    //    FloatBuffer targetBuffer = ByteBuffer.wrap(target).asFloatBuffer();
+
+    //    FloatBuffer featureBuffer = ByteBuffer.wrap(feature).asFloatBuffer();
+
+     //   java.io.DataInputStream fea = new java.io.DataInputStream(new java.io.ByteArrayInputStream(feature));
+     //   java.io.DataInputStream tar = new java.io.DataInputStream(new java.io.ByteArrayInputStream(target));
+
+        int length = target.length/4;
+        float distance = 0;
+        if(feature.length >= target.length)
+        {
+      ///  FloatBuffer searchFeature = ByteBuffer.wrap(bytes.bytes).asFloatBuffer();
+            for(int i = 0; i < length; i++)
+            {
+                int j = i*4;
+                int asInt = (feature[j+0] & 0xFF)
+                        | ((feature[j+1] & 0xFF) << 8)
+                        | ((feature[j+2] & 0xFF) << 16)
+                        | ((feature[j+3] & 0xFF) << 24);
+                float eleFeature = Float.intBitsToFloat(asInt);
+                asInt = (target[j+0] & 0xFF)
+                        | ((target[j+1] & 0xFF) << 8)
+                        | ((target[j+2] & 0xFF) << 16)
+                        | ((target[j+3] & 0xFF) << 24);
+                float eleTarget = Float.intBitsToFloat(asInt);
+
+                distance += (eleFeature - eleTarget)*(eleFeature - eleTarget);
+            }
+        }
+
+        if(distance < 10 )
+            score = 10 - distance;
 
       // This collector cannot handle these scores:
       assert score != Float.NEGATIVE_INFINITY;
@@ -269,7 +324,8 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
   ScoreDoc pqTop;
   int docBase = 0;
   Scorer scorer;
-    
+  IndexReaderContext context;
+  BytesRef termValue;
   // prevents instantiation
   private TopScoreDocCollector(int numHits) {
     super(new HitQueue(numHits, true));
@@ -303,7 +359,15 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
   public void setNextReader(AtomicReaderContext context) {
     docBase = context.docBase;
   }
-  
+
+  public void setContext(IndexReaderContext context) {
+        this.context = context;
+  }
+
+  public void setTermValue(  BytesRef termValue) {
+        this.termValue = termValue;
+  }
+
   @Override
   public void setScorer(Scorer scorer) throws IOException {
     this.scorer = scorer;

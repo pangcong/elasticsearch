@@ -32,11 +32,8 @@
 * https://github.com/Exercise/FOQElasticaBundle[ElasticaBundle]:
   Symfony2 Bundle wrapping Elastica.
 
-* https://drupal.org/project/elasticsearch_connector[Drupal]:
-  Drupal Elasticsearch integration (1.0.0 and later).
-
 * http://drupal.org/project/elasticsearch[Drupal]:
-  Drupal Elasticsearch integration (0.90 and earlier).
+  Drupal Elasticsearch integration.
 
 * https://github.com/refuge/couch_es[couch_es]:
   elasticsearch helper for couchdb based products (apache couchdb, bigcouch & refuge)
@@ -46,7 +43,7 @@
 
 * https://github.com/dadoonet/spring-elasticsearch[Spring Elasticsearch]:
   Spring Factory for Elasticsearch
-
+  
 * https://github.com/spring-projects/spring-data-elasticsearch[Spring Data Elasticsearch]:
   Spring Data implementation for Elasticsearch
 

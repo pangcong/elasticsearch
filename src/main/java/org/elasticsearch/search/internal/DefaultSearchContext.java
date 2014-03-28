@@ -230,13 +230,13 @@ public class DefaultSearchContext extends SearchContext {
         }
         Filter searchFilter = searchFilter(types());
         if (searchFilter != null) {
-            if (Queries.isConstantMatchAllQuery(query())) {
-                Query q = new XConstantScoreQuery(searchFilter);
+           // if (Queries.isConstantMatchAllQuery(query())) {
+                Query q = new org.apache.lucene.search.ConstantScoreQuery(searchFilter,query());
                 q.setBoost(query().getBoost());
                 parsedQuery(new ParsedQuery(q, parsedQuery()));
-            } else {
-                parsedQuery(new ParsedQuery(new XFilteredQuery(query(), searchFilter), parsedQuery()));
-            }
+          //  } else {
+         //       parsedQuery(new ParsedQuery(new XFilteredQuery(query(), searchFilter), parsedQuery()));
+         //   }
         }
     }
 

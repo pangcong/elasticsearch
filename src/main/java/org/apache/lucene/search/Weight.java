@@ -70,7 +70,7 @@ public abstract class Weight {
 
   /** The query that this concerns. */
   public abstract Query getQuery();
-  
+
   /** The value for normalization of contained query clauses (e.g. sum of squared weights). */
   public abstract float getValueForNormalization() throws IOException;
 

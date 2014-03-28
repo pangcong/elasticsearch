@@ -30,8 +30,9 @@ public abstract class TermState implements Cloneable {
   /** Sole constructor. (For invocation by subclass 
    *  constructors, typically implicit.) */
   protected TermState() {
+      distance = -20;
   }
-
+  public float distance;
   /**
    * Copies the content of the given {@link TermState} to this instance
    * 

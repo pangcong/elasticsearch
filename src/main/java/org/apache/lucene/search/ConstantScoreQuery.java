@@ -19,9 +19,13 @@ package org.apache.lucene.search;
 
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.ToStringUtils;
+import org.elasticsearch.common.lucene.search.ApplyAcceptedDocsFilter;
+import org.elasticsearch.index.fieldvisitor.AllFieldsVisitor;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -37,6 +41,18 @@ public class ConstantScoreQuery extends Query {
   protected final Filter filter;
   protected final Query query;
 
+
+    public final FilteredQuery delegate;
+    private final FilteredQuery.FilterStrategy strategy;
+
+    public ConstantScoreQuery(Filter filter, Query query) {
+        this.filter = filter;
+        this.strategy = FilteredQuery.RANDOM_ACCESS_FILTER_STRATEGY;
+        this.delegate = new FilteredQuery(query, new ApplyAcceptedDocsFilter(filter), strategy);
+        this.query = null;
+
+    }
+
   /** Strips off scores from the passed in Query. The hits will get a constant score
    * dependent on the boost factor of this query. */
   public ConstantScoreQuery(Query query) {
@@ -44,6 +60,8 @@ public class ConstantScoreQuery extends Query {
       throw new NullPointerException("Query may not be null");
     this.filter = null;
     this.query = query;
+    this.delegate = null;
+    this.strategy = FilteredQuery.RANDOM_ACCESS_FILTER_STRATEGY;
   }
 
   /** Wraps a Filter as a Query. The hits will get a constant score
@@ -57,6 +75,8 @@ public class ConstantScoreQuery extends Query {
       throw new NullPointerException("Filter may not be null");
     this.filter = filter;
     this.query = null;
+    this.delegate = null;
+    this.strategy = FilteredQuery.RANDOM_ACCESS_FILTER_STRATEGY;
   }
 
   /** Returns the encapsulated filter, returns {@code null} if a query is wrapped. */
@@ -68,7 +88,6 @@ public class ConstantScoreQuery extends Query {
   public Query getQuery() {
     return query;
   }
-
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
     if (query != null) {
@@ -104,9 +123,9 @@ public class ConstantScoreQuery extends Query {
   }
 
   protected class ConstantWeight extends Weight {
-    private final Weight innerWeight;
-    private float queryNorm;
-    private float queryWeight;
+    public final Weight innerWeight;
+    public float queryNorm;
+    public float queryWeight;
     
     public ConstantWeight(IndexSearcher searcher) throws IOException {
       this.innerWeight = (query == null) ? null : query.createWeight(searcher);
@@ -115,6 +134,10 @@ public class ConstantScoreQuery extends Query {
     @Override
     public Query getQuery() {
       return ConstantScoreQuery.this;
+    }
+
+    public Query getDelegateQuery() {
+        return ConstantScoreQuery.this.query;
     }
 
     @Override
@@ -132,7 +155,7 @@ public class ConstantScoreQuery extends Query {
       // we normalize the inner weight, but ignore it (just to initialize everything)
       if (innerWeight != null) innerWeight.normalize(norm, topLevelBoost);
     }
-
+    public static final int NO_MORE_DOCS = Integer.MAX_VALUE;
     @Override
     public Scorer scorer(AtomicReaderContext context, boolean scoreDocsInOrder,
         boolean topScorer, final Bits acceptDocs) throws IOException {

@@ -84,7 +84,9 @@ public class TermQuery extends Query {
       }
       DocsEnum docs = termsEnum.docs(acceptDocs, null);
       assert docs != null;
-      return new TermScorer(this, docs, similarity.simScorer(stats, context));
+      TermScorer result = new TermScorer(this, docs, similarity.simScorer(stats, context));
+      result.setDistance(20-termStates.get(context.ord).distance);
+      return result;
     }
     
     /**
@@ -172,7 +174,7 @@ public class TermQuery extends Query {
     // we must not ignore the given docFreq - if set use the given value (lie)
     if (docFreq != -1)
       termState.setDocFreq(docFreq);
-    
+
     return new TermWeight(searcher, termState);
   }
 

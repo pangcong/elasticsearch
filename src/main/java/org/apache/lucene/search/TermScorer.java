@@ -27,7 +27,7 @@ import org.apache.lucene.search.similarities.Similarity;
 final class TermScorer extends Scorer {
   private final DocsEnum docsEnum;
   private final Similarity.SimScorer docScorer;
-  
+  private float distance;
   /**
    * Construct a <code>TermScorer</code>.
    * 
@@ -43,6 +43,7 @@ final class TermScorer extends Scorer {
     super(weight);
     this.docScorer = docScorer;
     this.docsEnum = td;
+    distance = -20;
   }
 
   @Override
@@ -55,6 +56,15 @@ final class TermScorer extends Scorer {
     return docsEnum.freq();
   }
 
+  public float getLength()
+  {
+      return distance;
+  }
+
+  public void setDistance(float dis)
+  {
+      distance = dis;
+  }
   /**
    * Advances to the next document matching the query. <br>
    * 
@@ -68,7 +78,10 @@ final class TermScorer extends Scorer {
   @Override
   public float score() throws IOException {
     assert docID() != NO_MORE_DOCS;
-    return docScorer.score(docsEnum.docID(), docsEnum.freq());  
+    if (distance < -5)
+        return docScorer.score(docsEnum.docID(), docsEnum.freq());
+    else
+        return distance;
   }
 
   /**
