@@ -71,6 +71,21 @@ public class Versions {
         return null;
     }
 
+    public static int loadRealDocId(IndexReader reader, Term term) throws IOException {
+        // iterate backwards to optimize for the frequently updated documents
+        // which are likely to be in the last segments
+        final List<AtomicReaderContext> leaves = reader.leaves();
+        for (int i = leaves.size() - 1; i >= 0; --i) {
+            final DocIdAndVersion docIdAndVersion = loadDocIdAndVersion(leaves.get(i), term);
+            if (docIdAndVersion != null) {
+                assert docIdAndVersion.version != NOT_FOUND;
+                return docIdAndVersion.docId + leaves.get(i).docBase;
+            }
+        }
+        return -1;
+    }
+
+
     /**
      * Load the version for the uid from the reader, returning<ul>
      * <li>{@link #NOT_FOUND} if no matching doc exists,

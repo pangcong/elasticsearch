@@ -20,11 +20,13 @@ package org.apache.lucene.search;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.util.HashMap;
 
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.CompositeReaderContext;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.PriorityQueue;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.index.fieldvisitor.AllFieldsVisitor;
 import org.apache.commons.codec.binary.Base64;
@@ -51,70 +53,135 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     
     @Override
     public void collect(int doc) throws IOException {
-      float score = scorer.score();
-
-       org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new AllFieldsVisitor();
-        try {
-            context.reader().document(doc + docBase, visitor);
-        } catch (Exception e) {
-            //logger.("failed to collect doc", e);
-            return;
-        }
-
-       String[] parts = visitor.source().toUtf8().split("\"");
-      //  BASE64Decoder decoder = new BASE64Decoder();
-      //  byte[] decodedBytes = decoder.decodeBuffer(parts[2]);
-        byte[] feature = Base64.decodeBase64(parts[3]);
-
-        byte[] target = Base64.decodeBase64(termValue.bytes);
-
-    //    FloatBuffer targetBuffer = ByteBuffer.wrap(target).asFloatBuffer();
-
-    //    FloatBuffer featureBuffer = ByteBuffer.wrap(feature).asFloatBuffer();
-
-     //   java.io.DataInputStream fea = new java.io.DataInputStream(new java.io.ByteArrayInputStream(feature));
-     //   java.io.DataInputStream tar = new java.io.DataInputStream(new java.io.ByteArrayInputStream(target));
-
-        int length = target.length/4;
-        float distance = 0;
-        if(feature.length >= target.length)
-        {
-      ///  FloatBuffer searchFeature = ByteBuffer.wrap(bytes.bytes).asFloatBuffer();
-            for(int i = 0; i < length; i++)
-            {
-                int j = i*4;
-                int asInt = (feature[j+0] & 0xFF)
-                        | ((feature[j+1] & 0xFF) << 8)
-                        | ((feature[j+2] & 0xFF) << 16)
-                        | ((feature[j+3] & 0xFF) << 24);
-                float eleFeature = Float.intBitsToFloat(asInt);
-                asInt = (target[j+0] & 0xFF)
-                        | ((target[j+1] & 0xFF) << 8)
-                        | ((target[j+2] & 0xFF) << 16)
-                        | ((target[j+3] & 0xFF) << 24);
-                float eleTarget = Float.intBitsToFloat(asInt);
-
-                distance += (eleFeature - eleTarget)*(eleFeature - eleTarget);
+       float score = 0;
+       // features = null;
+       if(features == null)
+       {
+            score = scorer.score();
+           // read the content based on document id
+            org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new AllFieldsVisitor();
+            try {
+                context.reader().document(doc + docBase, visitor);
+            } catch (Exception e) {
+                //logger.("failed to collect doc", e);
+                return;
             }
-        }
+            // decode feature and target from base64 to byte.
+           String[] parts = visitor.source().toUtf8().split("\"");
+            byte[] feature = Base64.decodeBase64(parts[3]);
+            byte[] target = Base64.decodeBase64(termValue.bytes);
+            // calculate the L2 distance using the decoded value
+            int length = target.length/4;
+            float distance = 0;
+            if(feature.length >= target.length)
+            {
+                for(int i = 0; i < length; i++)
+                {
+                    int j = i*4;
+                    int asInt = (feature[j+0] & 0xFF)
+                            | ((feature[j+1] & 0xFF) << 8)
+                            | ((feature[j+2] & 0xFF) << 16)
+                            | ((feature[j+3] & 0xFF) << 24);
+                    float eleFeature = Float.intBitsToFloat(asInt);
+                    asInt = (target[j+0] & 0xFF)
+                            | ((target[j+1] & 0xFF) << 8)
+                            | ((target[j+2] & 0xFF) << 16)
+                            | ((target[j+3] & 0xFF) << 24);
+                    float eleTarget = Float.intBitsToFloat(asInt);
 
-        if(distance < 10 )
-            score = 10 - distance;
+                    distance += (eleFeature - eleTarget)*(eleFeature - eleTarget);
+                }
+            }
+            // scoring by distance
+            if(distance < 10 )
+            {
+                score = 10 - distance;
+            }
+           // This collector cannot handle these scores:
+           assert score != Float.NEGATIVE_INFINITY;
+           assert !Float.isNaN(score);
 
-      // This collector cannot handle these scores:
-      assert score != Float.NEGATIVE_INFINITY;
-      assert !Float.isNaN(score);
+           totalHits++;
+           if (score <= pqTop.score) {
+               // Since docs are returned in-order (i.e., increasing doc Id), a document
+               // with equal score to pqTop.score cannot compete since HitQueue favors
+               // documents with lower doc Ids. Therefore reject those docs too.
+               return;
+           }
 
-      totalHits++;
-      if (score <= pqTop.score) {
-        // Since docs are returned in-order (i.e., increasing doc Id), a document
-        // with equal score to pqTop.score cannot compete since HitQueue favors
-        // documents with lower doc Ids. Therefore reject those docs too.
-        return;
-      }
-      pqTop.doc = doc + docBase;
-      pqTop.score = score;
-      pqTop = pq.updateTop();
+           pqTop.doc = doc + docBase;
+           pqTop.score = score;
+           pqTop = pq.updateTop();
+       }
+       else
+       {
+           byte[] target = Base64.decodeBase64(termValue.bytes);
+           int length = target.length/4;
+           float[] targetFeature = new float[length];
+           for(int i = 0; i < length; i++)
+           {
+               int j = i*4;
+               int asInt = (target[j+0] & 0xFF)
+                       | ((target[j+1] & 0xFF) << 8)
+                       | ((target[j+2] & 0xFF) << 16)
+                       | ((target[j+3] & 0xFF) << 24);
+               targetFeature[i] = Float.intBitsToFloat(asInt);
+           }
+           for (java.util.Map.Entry<String, float[]> entry : features.entrySet()) {
+               String key = entry.getKey();
+               float[] value = entry.getValue();
+               float distance = 0;
+               if(value.length >= targetFeature.length)
+               {
+                   for(int i = 0; i < length; i++)
+                   {
+                       float dis = targetFeature[i] - value[i];
+                       distance += dis*dis;
+                   }
+               }
+               else
+               {
+                   continue;
+               }
+               // scoring by distance
+               if(distance < 10 )
+               {
+                   score = 10 - distance;
+               }
+
+               // This collector cannot handle these scores:
+               assert score != Float.NEGATIVE_INFINITY;
+               assert !Float.isNaN(score);
+
+               totalHits++;
+               if (score <= pqTop.score) {
+                   // Since docs are returned in-order (i.e., increasing doc Id), a document
+                   // with equal score to pqTop.score cannot compete since HitQueue favors
+                   // documents with lower doc Ids. Therefore reject those docs too.
+                   continue;
+               }
+
+               pqTop.doc = -1;
+               pqTop.score = score;
+               pqTop.key = key;
+               pqTop = pq.updateTop();
+           }
+
+           // get docId from key;
+           final ScoreDoc[] scoreDocs = new ScoreDoc[pq.size()];
+           for (int i = pq.size() - 1; i >= 0; i--) // put docs in array
+           {
+               scoreDocs[i] = pq.pop();
+               org.apache.lucene.index.Term term = new org.apache.lucene.index.Term("_uid",scoreDocs[i].key);
+               scoreDocs[i].doc = org.elasticsearch.common.lucene.uid.Versions.loadRealDocId(context.reader(), term);
+           }
+           pq.clear();
+           for(int i = scoreDocs.length-1; i>=0;i--)
+           {
+               pq.add(scoreDocs[i]);
+           }
+       }
+
     }
     
     @Override
@@ -326,6 +393,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
   Scorer scorer;
   IndexReaderContext context;
   BytesRef termValue;
+  public HashMap<String,float[]> features = null;
   // prevents instantiation
   private TopScoreDocCollector(int numHits) {
     super(new HitQueue(numHits, true));

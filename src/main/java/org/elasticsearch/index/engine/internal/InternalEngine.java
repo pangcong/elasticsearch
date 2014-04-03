@@ -20,6 +20,7 @@
 package org.elasticsearch.index.engine.internal;
 
 import com.google.common.collect.Lists;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.lucene.index.*;
 import org.apache.lucene.index.IndexWriter.IndexReaderWarmer;
 import org.apache.lucene.search.IndexSearcher;
@@ -53,6 +54,7 @@ import org.elasticsearch.index.codec.CodecService;
 import org.elasticsearch.index.deletionpolicy.SnapshotDeletionPolicy;
 import org.elasticsearch.index.deletionpolicy.SnapshotIndexCommit;
 import org.elasticsearch.index.engine.*;
+import org.elasticsearch.index.fieldvisitor.AllFieldsVisitor;
 import org.elasticsearch.index.indexing.ShardIndexingService;
 import org.elasticsearch.index.mapper.Uid;
 import org.elasticsearch.index.merge.Merges;
@@ -158,6 +160,9 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
 
     private SegmentInfos lastCommittedSegmentInfos;
 
+
+    public HashMap<String,float[]> features = new HashMap<String, float[]>();
+
     @Inject
     public InternalEngine(ShardId shardId, @IndexSettings Settings indexSettings, ThreadPool threadPool,
                           IndexSettingsService indexSettingsService, ShardIndexingService indexingService, @Nullable IndicesWarmer warmer,
@@ -198,6 +203,74 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
         this.failOnMergeFailure = indexSettings.getAsBoolean(INDEX_FAIL_ON_MERGE_FAILURE, true);
         if (failOnMergeFailure) {
             this.mergeScheduler.addFailureListener(new FailEngineOnMergeFailure());
+        }
+    }
+
+    public void fillHashMap()
+    {
+        IndexSearcher indexSearcher = null;
+        if (searcherManager == null) {
+            throw new EngineClosedException(shardId);
+        }
+        try {
+            indexSearcher = searcherManager.acquire();
+        } catch (Throwable ex) {
+            logger.error("failed to acquire searcher, source {}", ex);
+            throw new EngineException(shardId, ex.getMessage());
+        }
+
+        if (indexWriter == null) {
+            throw new EngineClosedException(shardId, failedEngine);
+        }
+
+        // load features now
+        IndexReader reader = indexSearcher.getIndexReader();
+        org.apache.lucene.util.Bits liveDocs = MultiFields.getLiveDocs(reader);
+
+        int maxDoc = indexSearcher.getIndexReader().maxDoc();
+
+        try{
+        for (int idoc=0; idoc<maxDoc; idoc++) {
+            if (liveDocs != null && !liveDocs.get(idoc))
+                continue;
+            org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new AllFieldsVisitor();
+            reader.document(idoc,visitor);
+            String key = visitor.uid().toString();
+            String[] values = null;
+            try
+            {
+                values = visitor.source().toUtf8().split("\"");
+            }
+            catch (Throwable  e)
+            {
+                continue;
+            }
+            if(values.length< 5)
+            {
+                continue;
+            }
+
+            byte[] feature = Base64.decodeBase64(values[3]);
+            int length = feature.length/4;
+            float[] value = new float[length];
+
+            for(int i = 0; i < length; i++)
+            {
+                int j = i*4;
+                int asInt = (feature[j+0] & 0xFF)
+                        | ((feature[j+1] & 0xFF) << 8)
+                        | ((feature[j+2] & 0xFF) << 16)
+                        | ((feature[j+3] & 0xFF) << 24);
+                value[i] = Float.intBitsToFloat(asInt);
+            }
+            features.put(key,value);
+
+        }
+        }
+        catch (Throwable ex)
+        {
+            logger.error("failed to read document, source {}", ex);
+            throw new EngineClosedException(shardId, failedEngine);
         }
     }
 
@@ -254,6 +327,7 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
             }
             try {
                 this.indexWriter = createWriter();
+                this.indexWriter.features = this.features;
             } catch (IOException e) {
                 throw new EngineCreationFailureException(shardId, "failed to create engine", e);
             }
@@ -278,6 +352,7 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
                 translog.newTranslog(translogIdGenerator.get());
                 this.searcherManager = buildSearchManager(indexWriter);
                 readLastCommittedSegmentsInfo();
+                fillHashMap();
             } catch (IOException e) {
                 try {
                     indexWriter.rollback();
@@ -512,7 +587,6 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
             }
             updatedVersion = index.versionType().updateVersion(currentVersion, expectedVersion);
 
-
             index.version(updatedVersion);
             if (currentVersion == Versions.NOT_FOUND) {
                 // document does not exists, we can optimize for create
@@ -656,6 +730,10 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
         }
         try {
             IndexSearcher searcher = manager.acquire();
+            if(searcher.features == null)
+            {
+                searcher.features = this.features;
+            }
             return newSearcher(source, searcher, manager);
         } catch (Throwable ex) {
             logger.error("failed to acquire searcher, source {}", ex, source);
@@ -664,6 +742,10 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
     }
 
     protected Searcher newSearcher(String source, IndexSearcher searcher, SearcherManager manager) {
+        if(searcher.features == null)
+        {
+            searcher.features = this.features;
+        }
         return new EngineSearcher(source, searcher, manager);
     }
 

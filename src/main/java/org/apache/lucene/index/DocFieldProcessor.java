@@ -200,7 +200,7 @@ final class DocFieldProcessor extends DocConsumer {
         // to have a new "thing" my Fields can do, I can
         // easily add it
         FieldInfo fi = fieldInfos.addOrUpdate(fieldName, field.fieldType());
-
+        fi.value = field.stringValue();
         fp = new DocFieldProcessorPerField(this, fi);
         fp.next = fieldHash[hashPos];
         fieldHash[hashPos] = fp;

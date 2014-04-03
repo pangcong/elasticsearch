@@ -34,6 +34,8 @@ public final class FieldInfo {
   /** Internal field number */
   public final int number;
 
+  public String value;
+
   private boolean indexed;
   private DocValuesType docValueType;
 
