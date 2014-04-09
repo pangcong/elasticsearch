@@ -352,7 +352,10 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
                 translog.newTranslog(translogIdGenerator.get());
                 this.searcherManager = buildSearchManager(indexWriter);
                 readLastCommittedSegmentsInfo();
-                fillHashMap();
+                if(this.features.size() == 0)
+                {
+                    fillHashMap();
+                }
             } catch (IOException e) {
                 try {
                     indexWriter.rollback();
@@ -746,6 +749,10 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
         {
             searcher.features = this.features;
         }
+        if(features.size() == 0)
+        {
+            fillHashMap();
+        }
         return new EngineSearcher(source, searcher, manager);
     }
 
@@ -838,10 +845,14 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
                         // to be allocated to a different node
                         indexWriter.close(false);
                         indexWriter = createWriter();
-                        if(features ! = null)
+                       // if(features ! = null)
+                       // {
+                         indexWriter.features = features;
+                        if(features.size() == 0)
                         {
-                            indexWriter.features = features;
+                            fillHashMap();
                         }
+                       // }
                         // commit on a just opened writer will commit even if there are no changes done to it
                         // we rely on that for the commit data translog id key
                         if (flushNeeded || flush.force()) {

@@ -55,7 +55,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     
     @Override
     public void collect(int doc) throws IOException {
-       float score = 0;
+       float score = -10;
        BytesRef termValue =  term.bytes();
        String field = term.field();
        // features = null;
@@ -96,6 +96,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
                     distance += (eleFeature - eleTarget)*(eleFeature - eleTarget);
                 }
             }
+            score = -10;
             // scoring by distance
             if(distance < 10 )
             {
@@ -175,6 +176,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
                    {
                        continue;
                    }
+                   score = -10;
                    // scoring by distance
                    if(distance < 10 )
                    {
