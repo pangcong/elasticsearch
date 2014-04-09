@@ -133,7 +133,7 @@ public class WeightedFilterCache extends AbstractIndexComponent implements Filte
         return new FilterCacheFilterWrapper(filterToCache, this);
     }
 
-    static class FilterCacheFilterWrapper extends CachedFilter {
+    public static class FilterCacheFilterWrapper extends CachedFilter {
 
         private final Filter filter;
 
@@ -144,6 +144,9 @@ public class WeightedFilterCache extends AbstractIndexComponent implements Filte
             this.cache = cache;
         }
 
+        public Filter getFilter() {
+            return filter;
+        }
 
         @Override
         public DocIdSet getDocIdSet(AtomicReaderContext context, Bits acceptDocs) throws IOException {

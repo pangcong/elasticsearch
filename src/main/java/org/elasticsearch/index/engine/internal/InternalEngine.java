@@ -838,7 +838,10 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
                         // to be allocated to a different node
                         indexWriter.close(false);
                         indexWriter = createWriter();
-
+                        if(features ! = null)
+                        {
+                            indexWriter.features = features;
+                        }
                         // commit on a just opened writer will commit even if there are no changes done to it
                         // we rely on that for the commit data translog id key
                         if (flushNeeded || flush.force()) {

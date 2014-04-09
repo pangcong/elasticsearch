@@ -25,6 +25,8 @@ import java.util.HashMap;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.CompositeReaderContext;
 import org.apache.lucene.index.IndexReaderContext;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.queries.TermFilter;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.PriorityQueue;
 import org.elasticsearch.ElasticsearchException;
@@ -54,6 +56,8 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     @Override
     public void collect(int doc) throws IOException {
        float score = 0;
+       BytesRef termValue =  term.bytes();
+       String field = term.field();
        // features = null;
        if(features == null)
        {
@@ -115,7 +119,30 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
        }
        else
        {
-           byte[] target = Base64.decodeBase64(termValue.bytes);
+           byte[] target = null;
+           if(field.equals("message"))
+           {
+               target = Base64.decodeBase64(termValue.bytes);
+           }
+           else if(field.equals("id"))
+           {
+               if(filterTerm.field().equals("_type"))
+               {
+                   String keyValue = filterTerm.bytes().utf8ToString()+"#"+termValue.utf8ToString();
+                   org.apache.lucene.index.Term term = new org.apache.lucene.index.Term("_uid",keyValue);
+                   int docID = org.elasticsearch.common.lucene.uid.Versions.loadRealDocId(context.reader(), term);
+                   org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new AllFieldsVisitor();
+                   context.reader().document(docID, visitor);
+
+                   // decode feature and target from base64 to byte.
+                   String[] parts = visitor.source().toUtf8().split("\"");
+                   target = Base64.decodeBase64(parts[3]);
+               }
+           }
+           if(target == null)
+           {
+               return;
+           }
            int length = target.length/4;
            float[] targetFeature = new float[length];
            for(int i = 0; i < length; i++)
@@ -127,46 +154,51 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
                        | ((target[j+3] & 0xFF) << 24);
                targetFeature[i] = Float.intBitsToFloat(asInt);
            }
-           for (java.util.Map.Entry<String, float[]> entry : features.entrySet()) {
-               String key = entry.getKey();
-               float[] value = entry.getValue();
-               float distance = 0;
-               if(value.length >= targetFeature.length)
-               {
-                   for(int i = 0; i < length; i++)
+
+           java.util.Map<String, float[]> map= java.util.Collections.synchronizedMap(features);
+
+           synchronized(map)
+           {
+               for (java.util.Map.Entry<String, float[]> entry : map.entrySet()) {
+                   String key = entry.getKey();
+                   float[] value = entry.getValue();
+                   float distance = 0;
+                   if(value.length >= targetFeature.length)
                    {
-                       float dis = targetFeature[i] - value[i];
-                       distance += dis*dis;
+                       for(int i = 0; i < length; i++)
+                       {
+                           float dis = targetFeature[i] - value[i];
+                           distance += dis*dis;
+                       }
                    }
-               }
-               else
-               {
-                   continue;
-               }
-               // scoring by distance
-               if(distance < 10 )
-               {
-                   score = 10 - distance;
-               }
+                   else
+                   {
+                       continue;
+                   }
+                   // scoring by distance
+                   if(distance < 10 )
+                   {
+                       score = 10 - distance;
+                   }
 
-               // This collector cannot handle these scores:
-               assert score != Float.NEGATIVE_INFINITY;
-               assert !Float.isNaN(score);
+                   // This collector cannot handle these scores:
+                   assert score != Float.NEGATIVE_INFINITY;
+                   assert !Float.isNaN(score);
 
-               totalHits++;
-               if (score <= pqTop.score) {
-                   // Since docs are returned in-order (i.e., increasing doc Id), a document
-                   // with equal score to pqTop.score cannot compete since HitQueue favors
-                   // documents with lower doc Ids. Therefore reject those docs too.
-                   continue;
+                   totalHits++;
+                   if (score <= pqTop.score) {
+                       // Since docs are returned in-order (i.e., increasing doc Id), a document
+                       // with equal score to pqTop.score cannot compete since HitQueue favors
+                       // documents with lower doc Ids. Therefore reject those docs too.
+                       continue;
+                   }
+
+                   pqTop.doc = -1;
+                   pqTop.score = score;
+                   pqTop.key = key;
+                   pqTop = pq.updateTop();
                }
-
-               pqTop.doc = -1;
-               pqTop.score = score;
-               pqTop.key = key;
-               pqTop = pq.updateTop();
            }
-
            // get docId from key;
            final ScoreDoc[] scoreDocs = new ScoreDoc[pq.size()];
            for (int i = pq.size() - 1; i >= 0; i--) // put docs in array
@@ -392,7 +424,8 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
   int docBase = 0;
   Scorer scorer;
   IndexReaderContext context;
-  BytesRef termValue;
+  Term term;
+  Term filterTerm;
   public HashMap<String,float[]> features = null;
   // prevents instantiation
   private TopScoreDocCollector(int numHits) {
@@ -432,9 +465,11 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
         this.context = context;
   }
 
-  public void setTermValue(  BytesRef termValue) {
-        this.termValue = termValue;
+  public void setTermValue(Term termValue) {
+        this.term = termValue;
   }
+
+  public void setTermFilterValue (Term term) { this.filterTerm = term; };
 
   @Override
   public void setScorer(Scorer scorer) throws IOException {

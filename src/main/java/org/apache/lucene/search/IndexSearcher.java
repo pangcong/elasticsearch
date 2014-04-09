@@ -39,11 +39,14 @@ import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.Terms;
+import org.apache.lucene.queries.TermFilter;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.NIOFSDirectory;    // javadoc
 import org.apache.lucene.util.ThreadInterruptedException;
 import org.apache.lucene.index.IndexWriter; // javadocs
+import org.elasticsearch.common.lucene.search.ApplyAcceptedDocsFilter;
+import org.elasticsearch.index.cache.filter.weighted.WeightedFilterCache;
 
 /** Implements search over a single IndexReader.
  *
@@ -602,7 +605,8 @@ public class IndexSearcher {
   protected void search(List<AtomicReaderContext> leaves, Weight weight, Collector collector)
       throws IOException {
 
-      ((TopScoreDocCollector)collector).setTermValue(((TermQuery) ((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).delegate.getQuery()).getTerm().bytes());
+      ((TopScoreDocCollector)collector).setTermValue(((TermQuery) ((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).delegate.getQuery()).getTerm());
+      ((TopScoreDocCollector)collector).setTermFilterValue(((TermFilter)(((WeightedFilterCache.FilterCacheFilterWrapper)((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).getFilter()).getFilter())).getTerm());
       ((TopScoreDocCollector)collector).setContext(readerContext);
       ((TopScoreDocCollector) collector).features = features;
       //features = null;
