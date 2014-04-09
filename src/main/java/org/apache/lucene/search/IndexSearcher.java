@@ -18,11 +18,7 @@ package org.apache.lucene.search;
  */
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
@@ -43,11 +39,14 @@ import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.TermContext;
 import org.apache.lucene.index.Terms;
+import org.apache.lucene.queries.TermFilter;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.NIOFSDirectory;    // javadoc
 import org.apache.lucene.util.ThreadInterruptedException;
 import org.apache.lucene.index.IndexWriter; // javadocs
+import org.elasticsearch.common.lucene.search.ApplyAcceptedDocsFilter;
+import org.elasticsearch.index.cache.filter.weighted.WeightedFilterCache;
 
 /** Implements search over a single IndexReader.
  *
@@ -90,6 +89,8 @@ public class IndexSearcher {
 
   // the default Similarity
   private static final Similarity defaultSimilarity = new DefaultSimilarity();
+
+  public HashMap<String,float[]> features = null;
   
   /**
    * Expert: returns a default Similarity instance.
@@ -604,6 +605,18 @@ public class IndexSearcher {
   protected void search(List<AtomicReaderContext> leaves, Weight weight, Collector collector)
       throws IOException {
 
+      ((TopScoreDocCollector)collector).setTermValue(((TermQuery) ((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).delegate.getQuery()).getTerm());
+      ((TopScoreDocCollector)collector).setTermFilterValue(((TermFilter)(((WeightedFilterCache.FilterCacheFilterWrapper)((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).getFilter()).getFilter())).getTerm());
+      ((TopScoreDocCollector)collector).setContext(readerContext);
+      ((TopScoreDocCollector) collector).features = features;
+      //features = null;
+
+     if(features != null)
+     {
+         collector.collect(0);
+         return;
+     }
+
     // TODO: should we make this
     // threaded...?  the Collector could be sync'd?
     // always use single thread:
@@ -616,8 +629,6 @@ public class IndexSearcher {
         continue;
       }
 
-      ((TopScoreDocCollector)collector).setTermValue(((TermQuery) ((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).delegate.getQuery()).getTerm().bytes());
-      ((TopScoreDocCollector)collector).setContext(readerContext);
       Scorer scorer = weight.scorer(ctx, !collector.acceptsDocsOutOfOrder(), true, ctx.reader().getLiveDocs());
       if (scorer != null) {
         try {

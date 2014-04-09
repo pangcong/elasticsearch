@@ -87,6 +87,7 @@ public final class SearcherManager extends ReferenceManager<IndexSearcher> {
     }
     this.searcherFactory = searcherFactory;
     current = getSearcher(searcherFactory, DirectoryReader.open(writer, applyAllDeletes));
+    current.features = writer.features;
   }
   
   /**

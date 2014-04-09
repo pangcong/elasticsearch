@@ -31,6 +31,8 @@ public class ScoreDoc {
   /** Only set by {@link TopDocs#merge} */
   public int shardIndex;
 
+  public String key;
+
   /** Constructs a ScoreDoc. */
   public ScoreDoc(int doc, float score) {
     this(doc, score, -1);

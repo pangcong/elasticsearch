@@ -35,6 +35,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.commons.codec.binary.Base64;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.lucene3x.Lucene3xCodec;
@@ -235,6 +236,8 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
   private final DocumentsWriter docWriter;
   private final Queue<Event> eventQueue;
   final IndexFileDeleter deleter;
+
+  public HashMap<String,float[]> features =null;
 
   // used by forceMerge to note those needing merging
   private Map<SegmentCommitInfo,Boolean> segmentsToMerge = new HashMap<SegmentCommitInfo,Boolean>();
@@ -1530,6 +1533,41 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
           processEvents(true, false);
         }
         success = true;
+        if(features != null)
+        {
+            String hashKey = null;
+
+            String hashValue = null;
+            for(IndexableField field : doc) {
+                final String fieldName = field.name();
+                if(fieldName.equals("_uid"))
+                {
+                    hashKey = field.stringValue();
+                }
+                else if(fieldName.equals("message"))
+                {
+                    hashValue = field.stringValue();
+                }
+            }
+            if(hashKey != null && hashValue != null)
+            {
+                byte[] feature = Base64.decodeBase64(hashValue);
+                int length = feature.length/4;
+                float[] value = new float[length];
+
+                for(int i = 0; i < length; i++)
+                {
+                    int j = i*4;
+                    int asInt = (feature[j+0] & 0xFF)
+                            | ((feature[j+1] & 0xFF) << 8)
+                            | ((feature[j+2] & 0xFF) << 16)
+                            | ((feature[j+3] & 0xFF) << 24);
+                    value[i] = Float.intBitsToFloat(asInt);
+                }
+                features.put(hashKey,value);
+            }
+        }
+
       } finally {
         if (!success) {
           if (infoStream.isEnabled("IW")) {
