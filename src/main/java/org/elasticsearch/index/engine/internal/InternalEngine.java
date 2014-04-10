@@ -161,7 +161,7 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
     private SegmentInfos lastCommittedSegmentInfos;
 
 
-    public HashMap<String,float[]> features = new HashMap<String, float[]>();
+    public java.util.concurrent.ConcurrentHashMap<String,float[]> features = new java.util.concurrent.ConcurrentHashMap<String, float[]>();
 
     @Inject
     public InternalEngine(ShardId shardId, @IndexSettings Settings indexSettings, ThreadPool threadPool,

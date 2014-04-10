@@ -90,7 +90,7 @@ public class IndexSearcher {
   // the default Similarity
   private static final Similarity defaultSimilarity = new DefaultSimilarity();
 
-  public HashMap<String,float[]> features = null;
+  public java.util.concurrent.ConcurrentHashMap<String,float[]> features = null;
   
   /**
    * Expert: returns a default Similarity instance.

@@ -156,11 +156,11 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
                targetFeature[i] = Float.intBitsToFloat(asInt);
            }
 
-           java.util.Map<String, float[]> map= java.util.Collections.synchronizedMap(features);
+           //java.util.Map<String, float[]> map= java.util.Collections.synchronizedMap(features);
 
-           synchronized(map)
+          // synchronized(map)
            {
-               for (java.util.Map.Entry<String, float[]> entry : map.entrySet()) {
+               for (java.util.Map.Entry<String, float[]> entry : features.entrySet()) {
                    String key = entry.getKey();
                    float[] value = entry.getValue();
                    float distance = 0;
@@ -428,7 +428,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
   IndexReaderContext context;
   Term term;
   Term filterTerm;
-  public HashMap<String,float[]> features = null;
+  public java.util.concurrent.ConcurrentHashMap<String,float[]> features = null;
   // prevents instantiation
   private TopScoreDocCollector(int numHits) {
     super(new HitQueue(numHits, true));

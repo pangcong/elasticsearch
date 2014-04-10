@@ -237,7 +237,7 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
   private final Queue<Event> eventQueue;
   final IndexFileDeleter deleter;
 
-  public HashMap<String,float[]> features =null;
+  public java.util.concurrent.ConcurrentHashMap<String,float[]> features =null;
 
   // used by forceMerge to note those needing merging
   private Map<SegmentCommitInfo,Boolean> segmentsToMerge = new HashMap<SegmentCommitInfo,Boolean>();
