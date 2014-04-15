@@ -59,41 +59,35 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
        BytesRef termValue =  term.bytes();
        String field = term.field();
        // features = null;
-       if(features == null)
+       if(features != null)
        {
             score = scorer.score();
            // read the content based on document id
-            org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new AllFieldsVisitor();
+            org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new org.elasticsearch.index.fieldvisitor.JustUidFieldsVisitor();
             try {
-                context.reader().document(doc + docBase, visitor);
+               context.reader().document(doc + docBase, visitor);
             } catch (Exception e) {
                 //logger.("failed to collect doc", e);
                 return;
             }
             // decode feature and target from base64 to byte.
-           String[] parts = visitor.source().toUtf8().split("\"");
-            byte[] feature = Base64.decodeBase64(parts[3]);
-            byte[] target = Base64.decodeBase64(termValue.bytes);
-            // calculate the L2 distance using the decoded value
-            int length = target.length/4;
-            float distance = 0;
-            if(feature.length >= target.length)
-            {
-                for(int i = 0; i < length; i++)
-                {
-                    int j = i*4;
-                    int asInt = (feature[j+0] & 0xFF)
-                            | ((feature[j+1] & 0xFF) << 8)
-                            | ((feature[j+2] & 0xFF) << 16)
-                            | ((feature[j+3] & 0xFF) << 24);
-                    float eleFeature = Float.intBitsToFloat(asInt);
-                    asInt = (target[j+0] & 0xFF)
-                            | ((target[j+1] & 0xFF) << 8)
-                            | ((target[j+2] & 0xFF) << 16)
-                            | ((target[j+3] & 0xFF) << 24);
-                    float eleTarget = Float.intBitsToFloat(asInt);
+       //    String uid = visitor.uid().toString();
+       // float[] feature = features.get(uid);
+          // float[] feature = null;
+         //  for (java.util.Map.Entry<String, float[]> entry : features.entrySet()) {
+         //      feature = entry.getValue();
+        //       break;
+        //   }
 
-                    distance += (eleFeature - eleTarget)*(eleFeature - eleTarget);
+           if(feature == null)
+               return;
+            float distance = 0;
+            if(feature.length >= targetFeature.length)
+            {
+                for(int i = 0; i < targetFeature.length; i++)
+                {
+                    float dis = feature[i] - targetFeature[i];
+                    distance += dis*dis;
                 }
             }
             score = -10;
@@ -121,7 +115,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
        else
        {
            byte[] target = null;
-           if(field.equals("message"))
+           if(field.equals("feature"))
            {
                target = Base64.decodeBase64(termValue.bytes);
            }
@@ -144,17 +138,6 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
            {
                return;
            }
-           int length = target.length/4;
-           float[] targetFeature = new float[length];
-           for(int i = 0; i < length; i++)
-           {
-               int j = i*4;
-               int asInt = (target[j+0] & 0xFF)
-                       | ((target[j+1] & 0xFF) << 8)
-                       | ((target[j+2] & 0xFF) << 16)
-                       | ((target[j+3] & 0xFF) << 24);
-               targetFeature[i] = Float.intBitsToFloat(asInt);
-           }
 
            //java.util.Map<String, float[]> map= java.util.Collections.synchronizedMap(features);
 
@@ -166,7 +149,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
                    float distance = 0;
                    if(value.length >= targetFeature.length)
                    {
-                       for(int i = 0; i < length; i++)
+                       for(int i = 0; i < targetFeature.length; i++)
                        {
                            float dis = targetFeature[i] - value[i];
                            distance += dis*dis;
@@ -428,6 +411,8 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
   IndexReaderContext context;
   Term term;
   Term filterTerm;
+  float[] targetFeature = null;
+
   public java.util.concurrent.ConcurrentHashMap<String,float[]> features = null;
   // prevents instantiation
   private TopScoreDocCollector(int numHits) {
@@ -442,7 +427,6 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     if (results == null) {
       return EMPTY_TOPDOCS;
     }
-    
     // We need to compute maxScore in order to set it in TopDocs. If start == 0,
     // it means the largest element is already in results, use its score as
     // maxScore. Otherwise pop everything else, until the largest element is
@@ -467,8 +451,24 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
         this.context = context;
   }
 
-  public void setTermValue(Term termValue) {
-        this.term = termValue;
+  public void setTermValue(Term termValue)
+  {
+      this.term = termValue;
+      if(term.field().equals("feature"))
+      {
+          byte[] target = Base64.decodeBase64(term.bytes().bytes);
+          // calculate the L2 distance using the decoded value
+          int length = target.length/4;
+          targetFeature = new float[length];
+          float distance = 0;
+          for(int i = 0; i < length; i++)
+          {
+              targetFeature[i] = (target[i*4+0] & 0xFF)
+                          | ((target[i*4+1] & 0xFF) << 8)
+                          | ((target[i*4+2] & 0xFF) << 16)
+                          | ((target[i*4+3] & 0xFF) << 24);
+          }
+      }
   }
 
   public void setTermFilterValue (Term term) { this.filterTerm = term; };

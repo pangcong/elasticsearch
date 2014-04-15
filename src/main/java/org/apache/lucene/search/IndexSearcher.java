@@ -611,7 +611,7 @@ public class IndexSearcher {
       ((TopScoreDocCollector) collector).features = features;
       //features = null;
 
-     if(features != null)
+     if(features == null)
      {
          collector.collect(0);
          return;

@@ -120,7 +120,9 @@ public final class SearcherManager extends ReferenceManager<IndexSearcher> {
     if (newReader == null) {
       return null;
     } else {
-      return getSearcher(searcherFactory, newReader);
+        IndexSearcher current = getSearcher(searcherFactory, newReader);
+        current.features = this.acquire().features;
+        return current;
     }
   }
   

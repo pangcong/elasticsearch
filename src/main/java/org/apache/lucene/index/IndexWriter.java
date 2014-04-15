@@ -987,7 +987,6 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
         } else {
           docWriter.abort(this); // already closed -- never sync on IW 
         }
-        
       } finally {
         try {
           // clean up merge scheduler in all cases, although flushing may have failed:
@@ -1544,7 +1543,7 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
                 {
                     hashKey = field.stringValue();
                 }
-                else if(fieldName.equals("message"))
+                else if(fieldName.equals("feature"))
                 {
                     hashValue = field.stringValue();
                 }

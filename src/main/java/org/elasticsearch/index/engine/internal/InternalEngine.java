@@ -74,6 +74,7 @@ import org.elasticsearch.index.translog.TranslogStreams;
 import org.elasticsearch.indices.warmer.IndicesWarmer;
 import org.elasticsearch.indices.warmer.InternalIndicesWarmer;
 import org.elasticsearch.threadpool.ThreadPool;
+import sun.print.resources.serviceui;
 
 import java.io.IOException;
 import java.util.*;
@@ -744,7 +745,7 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
         }
     }
 
-    protected Searcher newSearcher(String source, IndexSearcher searcher, SearcherManager manager) {
+    protected Searcher newSearcher(String source, IndexSearcher searcher, SearcherManager manager){
         if(searcher.features == null)
         {
             searcher.features = this.features;
@@ -1539,6 +1540,16 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
             this.source = source;
             this.searcher = searcher;
             this.manager = manager;
+            try{
+            if(searcher.features == null)
+            {
+                searcher.features = manager.acquire().features;
+            }
+            }
+            catch(Exception ee)
+            {
+                
+            }
             this.released = new AtomicBoolean(false);
         }
 
@@ -1651,6 +1662,7 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
                             // we don't want to close the inner readers, just increase ref on them
                             newSearcher = new IndexSearcher(new MultiReader(readers.toArray(new IndexReader[readers.size()]), false));
                             closeNewSearcher = true;
+                            newSearcher.features = searcherManager.acquire().features;
                         }
                     }
 
@@ -1672,6 +1684,18 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
                         IOUtils.closeWhileHandlingException(newSearcher.getIndexReader()); // ignore
                     }
                 }
+            }
+            if(searcher.features == null)
+            {
+                try
+                {
+                    searcher.features = searcherManager.acquire().features;
+                }
+                catch (Exception ee)
+                {
+
+                }
+
             }
             return searcher;
         }
