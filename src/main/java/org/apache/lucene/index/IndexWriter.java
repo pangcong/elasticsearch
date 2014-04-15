@@ -40,6 +40,7 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.lucene3x.Lucene3xCodec;
 import org.apache.lucene.codecs.lucene3x.Lucene3xSegmentInfoFormat;
+import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.index.FieldInfo.DocValuesType;
 import org.apache.lucene.index.FieldInfos.FieldNumbers;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
@@ -55,11 +56,8 @@ import org.apache.lucene.store.Lock;
 import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.store.MergeInfo;
 import org.apache.lucene.store.TrackingDirectoryWrapper;
-import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.Constants;
-import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.InfoStream;
-import org.apache.lucene.util.ThreadInterruptedException;
+import org.apache.lucene.util.*;
+import org.apache.lucene.document.Field;
 
 /**
   An <code>IndexWriter</code> creates and maintains an index.
@@ -238,6 +236,8 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
   final IndexFileDeleter deleter;
 
   public java.util.concurrent.ConcurrentHashMap<String,float[]> features =null;
+
+  public long[] _uidArray = null;
 
   // used by forceMerge to note those needing merging
   private Map<SegmentCommitInfo,Boolean> segmentsToMerge = new HashMap<SegmentCommitInfo,Boolean>();
@@ -1536,17 +1536,20 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
         {
             String hashKey = null;
 
+
             String hashValue = null;
             for(IndexableField field : doc) {
                 final String fieldName = field.name();
                 if(fieldName.equals("_uid"))
                 {
-                    hashKey = field.stringValue();
+                    hashKey = field.stringValue();//Field("pangcong",hashKey.getBytes())
                 }
                 else if(fieldName.equals("feature"))
                 {
                     hashValue = field.stringValue();
                 }
+
+
             }
             if(hashKey != null && hashValue != null)
             {

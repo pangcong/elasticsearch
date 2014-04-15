@@ -29,22 +29,12 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.AtomicReaderContext;
-import org.apache.lucene.index.DirectoryReader; // javadocs
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.MultiFields;
-import org.apache.lucene.index.IndexReaderContext;
-import org.apache.lucene.index.ReaderUtil;
-import org.apache.lucene.index.StoredFieldVisitor;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.TermContext;
-import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.*;
 import org.apache.lucene.queries.TermFilter;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.NIOFSDirectory;    // javadoc
 import org.apache.lucene.util.ThreadInterruptedException;
-import org.apache.lucene.index.IndexWriter; // javadocs
 import org.elasticsearch.common.lucene.search.ApplyAcceptedDocsFilter;
 import org.elasticsearch.index.cache.filter.weighted.WeightedFilterCache;
 
@@ -610,17 +600,39 @@ public class IndexSearcher {
       ((TopScoreDocCollector)collector).setContext(readerContext);
       ((TopScoreDocCollector) collector).features = features;
       //features = null;
+      FieldCache dEFAULT =  FieldCache.DEFAULT;
 
      if(features == null)
      {
          collector.collect(0);
          return;
      }
-
     // TODO: should we make this
     // threaded...?  the Collector could be sync'd?
     // always use single thread:
     for (AtomicReaderContext ctx : leaves) { // search each subreader
+     //   FieldCache.DEFAULT.getDocsWithField()
+      //     ctx.reader().getCoreCacheKey()
+        ((TopScoreDocCollector)collector).setContext(ctx);
+      /*  int maxDoc =  ctx.reader().maxDoc();
+        long[] _uidArray = new long[maxDoc];
+        String[] docIds = new String[maxDoc];
+        NumericDocValues versions = ctx.reader().getNumericDocValues("_version");
+        for(int i = 0; i < maxDoc; i++)
+        {
+            _uidArray[i] = versions.get(i);
+        }
+
+        SortedDocValues sVersions = ctx.reader().getSortedDocValues("_pangcong_haha");
+        for(int i = 0; i < maxDoc; i++)
+        {
+            org.apache.lucene.util.BytesRef test = new org.apache.lucene.util.BytesRef();
+            sVersions.get(i,test);
+            docIds[i] = test.utf8ToString();
+        }*/
+
+        ((TopScoreDocCollector)collector).setDocValues(ctx.reader().getSortedDocValues("_pangcong_haha"));
+
       try {
         collector.setNextReader(ctx);
       } catch (CollectionTerminatedException e) {

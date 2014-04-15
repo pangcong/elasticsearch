@@ -32,6 +32,8 @@ import org.apache.lucene.util.PriorityQueue;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.index.fieldvisitor.AllFieldsVisitor;
 import org.apache.commons.codec.binary.Base64;
+import org.apache.lucene.index.SortedDocValues;
+
 /**
  * A {@link Collector} implementation that collects the top-scoring hits,
  * returning them as a {@link TopDocs}. This is used by {@link IndexSearcher} to
@@ -63,16 +65,19 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
        {
             score = scorer.score();
            // read the content based on document id
-            org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new org.elasticsearch.index.fieldvisitor.JustUidFieldsVisitor();
+          //  org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new org.elasticsearch.index.fieldvisitor.JustUidFieldsVisitor();
             try {
-               context.reader().document(doc + docBase, visitor);
+            //   context.reader().document(doc + docBase, visitor);
             } catch (Exception e) {
                 //logger.("failed to collect doc", e);
                 return;
             }
             // decode feature and target from base64 to byte.
-       //    String uid = visitor.uid().toString();
-       // float[] feature = features.get(uid);
+           BytesRef test= new BytesRef();
+           //org.apache.lucene.index.SortedDocValues sVersions = ((AtomicReaderContext)context).reader().getSortedDocValues("_pangcong_haha");
+            docValues.get(doc,test);
+           String uid = test.utf8ToString();
+        float[] feature = features.get(uid);
           // float[] feature = null;
          //  for (java.util.Map.Entry<String, float[]> entry : features.entrySet()) {
          //      feature = entry.getValue();
@@ -409,6 +414,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
   int docBase = 0;
   Scorer scorer;
   IndexReaderContext context;
+  SortedDocValues docValues;
   Term term;
   Term filterTerm;
   float[] targetFeature = null;
@@ -441,7 +447,9 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     
     return new TopDocs(totalHits, results, maxScore);
   }
-  
+
+  public void setDocValues(SortedDocValues docValues) { this.docValues = docValues;};
+
   @Override
   public void setNextReader(AtomicReaderContext context) {
     docBase = context.docBase;

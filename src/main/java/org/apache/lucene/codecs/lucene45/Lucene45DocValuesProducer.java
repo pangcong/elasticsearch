@@ -728,7 +728,7 @@ public class Lucene45DocValuesProducer extends DocValuesProducer implements Clos
           return -termsEnum.ord()-1;
         }
       } catch (IOException bogus) {
-        throw new RuntimeException(bogus);
+        throwd new RuntimeException(bogus);
       }
     }
     

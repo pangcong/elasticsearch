@@ -512,7 +512,7 @@ public class Field implements IndexableField {
       final NumericTokenStream nts = (NumericTokenStream) internalTokenStream;
       // initialize value in TokenStream
       final Number val = (Number) fieldsData;
-      switch (numericType) {
+        switch (numericType) {
       case INT:
         nts.setIntValue(val.intValue());
         break;
