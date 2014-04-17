@@ -600,7 +600,6 @@ public class IndexSearcher {
       ((TopScoreDocCollector)collector).setContext(readerContext);
       ((TopScoreDocCollector) collector).features = features;
       //features = null;
-      FieldCache dEFAULT =  FieldCache.DEFAULT;
 
      if(features == null)
      {
@@ -623,7 +622,7 @@ public class IndexSearcher {
             _uidArray[i] = versions.get(i);
         }
 
-        SortedDocValues sVersions = ctx.reader().getSortedDocValues("_pangcong_haha");
+        SortedDocValues sVersions = ctx.reader().getSortedDocValues("FieldCache.DEFAULT.DOCIDMAPPING");
         for(int i = 0; i < maxDoc; i++)
         {
             org.apache.lucene.util.BytesRef test = new org.apache.lucene.util.BytesRef();
@@ -631,7 +630,7 @@ public class IndexSearcher {
             docIds[i] = test.utf8ToString();
         }*/
 
-        ((TopScoreDocCollector)collector).setDocValues(ctx.reader().getSortedDocValues("_pangcong_haha"));
+        ((TopScoreDocCollector)collector).setDocValues(ctx.reader().getSortedDocValues(FieldCache.DEFAULT.DOCIDMAPPING));
 
       try {
         collector.setNextReader(ctx);

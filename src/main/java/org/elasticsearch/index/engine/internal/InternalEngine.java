@@ -21,12 +21,11 @@ package org.elasticsearch.index.engine.internal;
 
 import com.google.common.collect.Lists;
 import org.apache.commons.codec.binary.Base64;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.index.*;
 import org.apache.lucene.index.IndexWriter.IndexReaderWarmer;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.SearcherFactory;
-import org.apache.lucene.search.SearcherManager;
+import org.apache.lucene.search.*;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.util.BytesRef;
@@ -592,12 +591,16 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
             updatedVersion = index.versionType().updateVersion(currentVersion, expectedVersion);
 
             index.version(updatedVersion);
+
+
             if (currentVersion == Versions.NOT_FOUND) {
                 // document does not exists, we can optimize for create
                 index.created(true);
                 if (index.docs().size() > 1) {
                     writer.addDocuments(index.docs(), index.analyzer());
                 } else {
+                    Field fld = new SortedDocValuesField(FieldCache.DEFAULT.DOCIDMAPPING, index.uid().bytes());
+                    index.docs().get(0).add(fld);
                     writer.addDocument(index.docs().get(0), index.analyzer());
                 }
             } else {
@@ -607,6 +610,8 @@ public class InternalEngine extends AbstractIndexShardComponent implements Engin
                 if (index.docs().size() > 1) {
                     writer.updateDocuments(index.uid(), index.docs(), index.analyzer());
                 } else {
+                    Field fld = new SortedDocValuesField(FieldCache.DEFAULT.DOCIDMAPPING, index.uid().bytes());
+                    index.docs().get(0).add(fld);
                     writer.updateDocument(index.uid(), index.docs().get(0), index.analyzer());
                 }
             }

@@ -51,6 +51,7 @@ import org.apache.lucene.util.RamUsageEstimator;
  */
 public interface FieldCache {
 
+  public static final String DOCIDMAPPING = "_pangcong_haha";
   /** Field values as 8-bit signed bytes */
   public static abstract class Bytes {
     /** Return a single Byte representation of this field's value. */

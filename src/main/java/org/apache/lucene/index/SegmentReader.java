@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.commons.codec.binary.Base64;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.DocValuesFormat;
 import org.apache.lucene.codecs.DocValuesProducer;
@@ -35,7 +36,9 @@ import org.apache.lucene.store.CompoundFileDirectory;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CloseableThreadLocal;
+import org.elasticsearch.index.fieldvisitor.AllFieldsVisitor;
 
 /**
  * IndexReader implementation over a single segment. 
@@ -70,6 +73,8 @@ public final class SegmentReader extends AtomicReader {
       return new HashMap<String,Bits>();
     }
   };
+
+
 
   final Map<String,DocValuesProducer> dvProducers = new HashMap<String,DocValuesProducer>();
   
@@ -168,7 +173,56 @@ public final class SegmentReader extends AtomicReader {
     }
   }
 
-  // initialize the per-field DocValuesProducer
+  public void fillHashMap() throws IOException{
+      if(doc2Image == null)
+      {
+          int maxDoc =  maxDoc();
+          doc2Image = new String[maxDoc];
+          SortedDocValues docValues =  getSortedDocValues(FieldCache.DEFAULT.DOCIDMAPPING );
+          doc2Features = new float[maxDoc][];
+          for(int i = 0; i < maxDoc; i++)
+          {
+              if (liveDocs != null && !liveDocs.get(i))
+                  continue;
+              BytesRef test= new BytesRef();
+              docValues.get(i,test);
+              String uid = test.utf8ToString();
+              doc2Image[i] = uid;
+              org.elasticsearch.index.fieldvisitor.FieldsVisitor visitor = new AllFieldsVisitor();
+              this.document(i, visitor);
+              String[] values = null;
+              try
+              {
+                  values = visitor.source().toUtf8().split("\"");
+              }
+              catch (Throwable  e)
+              {
+                  continue;
+              }
+              if(values.length< 5)
+              {
+                  continue;
+              }
+
+              byte[] feature = Base64.decodeBase64(values[3]);
+              int length = feature.length/4;
+              float[] value = new float[length];
+
+              for(int k = 0; k < length; k++)
+              {
+                  int j = k*4;
+                  int asInt = (feature[j+0] & 0xFF)
+                          | ((feature[j+1] & 0xFF) << 8)
+                          | ((feature[j+2] & 0xFF) << 16)
+                          | ((feature[j+3] & 0xFF) << 24);
+                  value[k] = Float.intBitsToFloat(asInt);
+              } 
+              doc2Features[i] = value;
+          }
+      }
+  }
+
+    // initialize the per-field DocValuesProducer
   private void initDocValuesProducers(Codec codec) throws IOException {
     final Directory dir = core.cfsReader != null ? core.cfsReader : si.info.dir;
     final DocValuesFormat dvFormat = codec.docValuesFormat();

@@ -19,11 +19,7 @@ package org.apache.lucene.index;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.WeakHashMap;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.document.Document;
@@ -76,6 +72,9 @@ public abstract class IndexReader implements Closeable {
   private boolean closed = false;
   private boolean closedByChild = false;
   private final AtomicInteger refCount = new AtomicInteger(1);
+
+  public String[] doc2Image = null;
+  public float[][] doc2Features = null;
 
   IndexReader() {
     if (!(this instanceof CompositeReader || this instanceof AtomicReader))

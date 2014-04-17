@@ -1535,8 +1535,6 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
         if(features != null)
         {
             String hashKey = null;
-
-
             String hashValue = null;
             for(IndexableField field : doc) {
                 final String fieldName = field.name();
@@ -1544,12 +1542,36 @@ public class IndexWriter implements Closeable, TwoPhaseCommit{
                 {
                     hashKey = field.stringValue();//Field("pangcong",hashKey.getBytes())
                 }
-                else if(fieldName.equals("feature"))
+                else if(fieldName.equals("_source"))
                 {
-                    hashValue = field.stringValue();
+                    String[] values = null;
+                    try
+                    {
+                        values = field.stringValue().split("\"");
+                    }
+                    catch (Throwable  e)
+                    {
+                        continue;
+                    }
+                    if(values.length< 5)
+                    {
+                        continue;
+                    }
+                    int index = -1;
+                    for(int i = 0; i < values.length; i++)
+                    {
+                        if(values.equals("feature"))
+                        {
+                            index = i+2;
+                            break;
+                        }
+                    }
+                    if(index != -1)
+                    {
+                        byte[] feature = Base64.decodeBase64(values[index]);
+                        hashValue = field.stringValue();
+                    }
                 }
-
-
             }
             if(hashKey != null && hashValue != null)
             {

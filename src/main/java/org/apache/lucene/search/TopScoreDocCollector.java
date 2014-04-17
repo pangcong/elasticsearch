@@ -73,14 +73,17 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
                 return;
             }
             // decode feature and target from base64 to byte.
-           BytesRef test= new BytesRef();
-           //org.apache.lucene.index.SortedDocValues sVersions = ((AtomicReaderContext)context).reader().getSortedDocValues("_pangcong_haha");
-            docValues.get(doc,test);
-           String uid = test.utf8ToString();
+        //   BytesRef test= new BytesRef();
+           //org.apache.lucene.index.SortedDocValues sVersions = ((AtomicReaderContext)context).reader().getSortedDocValues("FieldCache.DEFAULT.DOCIDMAPPING");
+           String uid  = ((AtomicReaderContext)context).reader().doc2Image[doc];
+
+         //   docValues.get(doc,test);
+          // String uid = test.utf8ToString();
         float[] feature = features.get(uid);
-          // float[] feature = null;
-         //  for (java.util.Map.Entry<String, float[]> entry : features.entrySet()) {
-         //      feature = entry.getValue();
+       //    float[] feature = ((AtomicReaderContext)context).reader().doc2Features[doc];
+         //  float[] feature = null;
+        //   for (java.util.Map.Entry<String, float[]> entry : features.entrySet()) {
+        //       feature = entry.getValue();
         //       break;
         //   }
 

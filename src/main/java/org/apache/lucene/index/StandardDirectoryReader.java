@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.lucene.search.FieldCache;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.IOUtils;
@@ -100,6 +101,7 @@ final class StandardDirectoryReader extends DirectoryReader {
           final SegmentReader reader = rld.getReadOnlyClone(IOContext.READ);
           if (reader.numDocs() > 0 || writer.getKeepFullyDeletedSegments()) {
             // Steal the ref:
+            reader.fillHashMap();
             readers.add(reader);
             infosUpto++;
           } else {
