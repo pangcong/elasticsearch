@@ -103,14 +103,14 @@ public final class TermContext {
             int length = termsEnum.term().length/4;
             FloatBuffer feature = ByteBuffer.wrap(termsEnum.term().bytes).asFloatBuffer();
             FloatBuffer searchFeature = ByteBuffer.wrap(bytes.bytes).asFloatBuffer();
-            float distance = 0;
-            for(int i = 0; i < length; i++)
-            {
-                distance += (feature.get(i) - searchFeature.get(i))*(feature.get(i) - searchFeature.get(i));
-            }
-            if(distance > 10 )
-                continue;
-            termState.distance = distance;
+         //   float distance = 0;
+          //  for(int i = 0; i < length; i++)
+           // {
+            //    distance += (feature.get(i) - searchFeature.get(i))*(feature.get(i) - searchFeature.get(i));
+           // }
+           // if(distance > 10 )
+            //    continue;
+           // termState.distance = distance;
             perReaderTermState.register(termState, ctx.ord, termsEnum.docFreq(), termsEnum.totalTermFreq());
           }
         }

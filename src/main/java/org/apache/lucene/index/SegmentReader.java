@@ -57,6 +57,8 @@ public final class SegmentReader extends AtomicReader {
   // tells us the docCount:
   private final int numDocs;
 
+  private final boolean setHash = false;
+
   final SegmentCoreReaders core;
   final SegmentDocValues segDocValues;
   
@@ -174,7 +176,7 @@ public final class SegmentReader extends AtomicReader {
   }
 
   public void fillHashMap() throws IOException{
-      if(doc2Image == null)
+      if(setHash && doc2Image == null)
       {
           int maxDoc =  maxDoc();
           doc2Image = new String[maxDoc];

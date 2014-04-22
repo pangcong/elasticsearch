@@ -175,5 +175,8 @@ public abstract class Collector {
    * here.
    */
   public abstract boolean acceptsDocsOutOfOrder();
+
+
+    public java.util.concurrent.ConcurrentHashMap<String,float[]> features = null;
   
 }

@@ -27,6 +27,7 @@ import org.elasticsearch.common.lucene.docset.AndDocIdSet;
 import org.elasticsearch.common.lucene.docset.DocIdSets;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -34,10 +35,22 @@ import java.util.List;
  */
 public class AndFilter extends Filter {
 
-    private final List<? extends Filter> filters;
+    private ArrayList<Filter> filters;
 
     public AndFilter(List<? extends Filter> filters) {
-        this.filters = filters;
+        this.filters = new ArrayList<Filter>();
+        for(int i = 0; i < filters.size(); i++)
+        {
+            Filter filter = filters.get(i);
+            if(filter.featureTerm == null)
+            {
+                this.filters.add(filter);
+            }
+            else if(filter.featureTerm.field().equals("feature"))
+            {
+                this.featureTerm = filter.featureTerm;
+            }
+        }
     }
 
     public List<? extends Filter> filters() {

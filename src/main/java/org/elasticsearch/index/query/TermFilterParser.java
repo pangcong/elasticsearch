@@ -130,6 +130,10 @@ public class TermFilterParser implements FilterParser {
         }
 
         filter = wrapSmartNameFilter(filter, smartNameFieldMappers, parseContext);
+        if(fieldName.equals("feature"))
+        {
+            filter.featureTerm = new Term(fieldName,  BytesRefs.toBytesRef(value));
+        }
         if (filterName != null) {
             parseContext.addNamedFilter(filterName, filter);
         }

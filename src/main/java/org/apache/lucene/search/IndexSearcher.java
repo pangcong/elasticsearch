@@ -595,25 +595,27 @@ public class IndexSearcher {
   protected void search(List<AtomicReaderContext> leaves, Weight weight, Collector collector)
       throws IOException {
 
-      ((TopScoreDocCollector)collector).setTermValue(((TermQuery) ((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).delegate.getQuery()).getTerm());
-      ((TopScoreDocCollector)collector).setTermFilterValue(((TermFilter)(((WeightedFilterCache.FilterCacheFilterWrapper)((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).getFilter()).getFilter())).getTerm());
-      ((TopScoreDocCollector)collector).setContext(readerContext);
-      ((TopScoreDocCollector) collector).features = features;
+     // ((TopScoreDocCollector)collector).setTermValue(((TermQuery)((ConstantScoreQuery)weight.getQuery()).getQuery()).getTerm());
+    //  FilteredQuery
+    //  ((TopScoreDocCollector)collector).setTermValue(((TermQuery) ((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).delegate.getQuery()).getTerm());
+     // ((TopScoreDocCollector)collector).setTermFilterValue(((TermFilter)(((WeightedFilterCache.FilterCacheFilterWrapper)((ConstantScoreQuery) (((ConstantScoreQuery) weight.getQuery()).getQuery())).getFilter()).getFilter())).getTerm());
+    //  ((TopScoreDocCollector)collector).setContext(readerContext);
+    //  ((TopScoreDocCollector) collector).features = features;
       //features = null;
 
-     if(features == null)
-     {
-         collector.collect(0);
-         return;
-     }
+  //   if(features == null)
+    // {
+    //     collector.collect(0);
+   //      return;
+   //  }
     // TODO: should we make this
     // threaded...?  the Collector could be sync'd?
     // always use single thread:
     for (AtomicReaderContext ctx : leaves) { // search each subreader
      //   FieldCache.DEFAULT.getDocsWithField()
       //     ctx.reader().getCoreCacheKey()
-        ((TopScoreDocCollector)collector).setContext(ctx);
-      /*  int maxDoc =  ctx.reader().maxDoc();
+      //  ((TopScoreDocCollector)collector).setContext(ctx);
+ /*       int maxDoc =  ctx.reader().maxDoc();
         long[] _uidArray = new long[maxDoc];
         String[] docIds = new String[maxDoc];
         NumericDocValues versions = ctx.reader().getNumericDocValues("_version");
@@ -622,7 +624,7 @@ public class IndexSearcher {
             _uidArray[i] = versions.get(i);
         }
 
-        SortedDocValues sVersions = ctx.reader().getSortedDocValues("FieldCache.DEFAULT.DOCIDMAPPING");
+        SortedDocValues sVersions = ctx.reader().getSortedDocValues(FieldCache.DEFAULT.DOCIDMAPPING);
         for(int i = 0; i < maxDoc; i++)
         {
             org.apache.lucene.util.BytesRef test = new org.apache.lucene.util.BytesRef();
@@ -630,17 +632,21 @@ public class IndexSearcher {
             docIds[i] = test.utf8ToString();
         }*/
 
-        ((TopScoreDocCollector)collector).setDocValues(ctx.reader().getSortedDocValues(FieldCache.DEFAULT.DOCIDMAPPING));
+
 
       try {
+          collector.features = this.features;
         collector.setNextReader(ctx);
+
       } catch (CollectionTerminatedException e) {
         // there is no doc of interest in this reader context
         // continue with the following leaf
         continue;
       }
 
+
       Scorer scorer = weight.scorer(ctx, !collector.acceptsDocsOutOfOrder(), true, ctx.reader().getLiveDocs());
+
       if (scorer != null) {
         try {
           scorer.score(collector);
@@ -706,8 +712,7 @@ public class IndexSearcher {
    */
   public Weight createNormalizedWeight(Query query) throws IOException {
     query = rewrite(query);
-    org.apache.lucene.search.ConstantScoreQuery constQuery = new org.apache.lucene.search.ConstantScoreQuery(query);
-    Weight weight = constQuery.createWeight(this);
+    Weight weight = query.createWeight(this);
     float v = weight.getValueForNormalization();
     float norm = getSimilarity().queryNorm(v);
     if (Float.isInfinite(norm) || Float.isNaN(norm)) {

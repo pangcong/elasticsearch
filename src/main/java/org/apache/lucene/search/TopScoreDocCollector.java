@@ -58,8 +58,71 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     @Override
     public void collect(int doc) throws IOException {
        float score = -10;
-       BytesRef termValue =  term.bytes();
+
+
+       if(fieldValue == null || features == null)
+       {
+           score = scorer.score();
+           assert score != Float.NEGATIVE_INFINITY;
+           assert !Float.isNaN(score);
+
+           totalHits++;
+           if (score <= pqTop.score) {
+               // Since docs are returned in-order (i.e., increasing doc Id), a document
+               // with equal score to pqTop.score cannot compete since HitQueue favors
+               // documents with lower doc Ids. Therefore reject those docs too.
+               return;
+           }
+
+           pqTop.doc = doc + docBase;
+           pqTop.score = score;
+           pqTop = pq.updateTop();
+           return;
+       }
+       else
+       {
+           BytesRef result = new BytesRef();
+           docValues.get(doc,result);
+           String uid = result.utf8ToString();
+           float[] feature = features.get(uid);
+           if(feature == null)
+               return;
+           float distance = 0;
+           if(feature.length >= targetFeature.length)
+           {
+               for(int i = 0; i < targetFeature.length; i++)
+               {
+                   float dis = feature[i] - targetFeature[i];
+                   distance += dis*dis;
+               }
+           }
+           score = -10;
+           // scoring by distance
+           if(distance < 10 )
+           {
+               score = 10 - distance;
+           }
+           // This collector cannot handle these scores:
+           assert score != Float.NEGATIVE_INFINITY;
+           assert !Float.isNaN(score);
+
+           totalHits++;
+           if (score <= pqTop.score) {
+               // Since docs are returned in-order (i.e., increasing doc Id), a document
+               // with equal score to pqTop.score cannot compete since HitQueue favors
+               // documents with lower doc Ids. Therefore reject those docs too.
+               return;
+           }
+
+           pqTop.doc = doc + docBase;
+           pqTop.score = score;
+           pqTop = pq.updateTop();
+       }
+    }
+    /*   BytesRef termValue =  term.bytes();
        String field = term.field();
+
+
        // features = null;
        if(features != null)
        {
@@ -205,10 +268,8 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
            {
                pq.add(scoreDocs[i]);
            }
-       }
+       }*/
 
-    }
-    
     @Override
     public boolean acceptsDocsOutOfOrder() {
       return false;
@@ -260,7 +321,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     }
 
     @Override
-    public void setNextReader(AtomicReaderContext context) {
+    public void setNextReader(AtomicReaderContext context) throws IOException{
       super.setNextReader(context);
       afterDoc = after.doc - docBase;
     }
@@ -355,7 +416,7 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     }
     
     @Override
-    public void setNextReader(AtomicReaderContext context) {
+    public void setNextReader(AtomicReaderContext context) throws IOException{
       super.setNextReader(context);
       afterDoc = after.doc - docBase;
     }
@@ -418,11 +479,12 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
   Scorer scorer;
   IndexReaderContext context;
   SortedDocValues docValues;
-  Term term;
+  Term term = null;
+  String fieldValue = null;
   Term filterTerm;
   float[] targetFeature = null;
 
-  public java.util.concurrent.ConcurrentHashMap<String,float[]> features = null;
+  //public java.util.concurrent.ConcurrentHashMap<String,float[]> features = null;
   // prevents instantiation
   private TopScoreDocCollector(int numHits) {
     super(new HitQueue(numHits, true));
@@ -451,33 +513,36 @@ public abstract class TopScoreDocCollector extends TopDocsCollector<ScoreDoc> {
     return new TopDocs(totalHits, results, maxScore);
   }
 
-  public void setDocValues(SortedDocValues docValues) { this.docValues = docValues;};
-
   @Override
-  public void setNextReader(AtomicReaderContext context) {
-    docBase = context.docBase;
-  }
-
-  public void setContext(IndexReaderContext context) {
+  public void setNextReader(AtomicReaderContext context) throws IOException{
+        docBase = context.docBase;
         this.context = context;
+      docValues = context.reader().getSortedDocValues(FieldCache.DEFAULT.DOCIDMAPPING);
   }
 
   public void setTermValue(Term termValue)
   {
-      this.term = termValue;
-      if(term.field().equals("feature"))
+      if(termValue != null)
       {
-          byte[] target = Base64.decodeBase64(term.bytes().bytes);
-          // calculate the L2 distance using the decoded value
-          int length = target.length/4;
-          targetFeature = new float[length];
-          float distance = 0;
-          for(int i = 0; i < length; i++)
+          this.term = termValue;
+
+          if(term.field().equals("feature"))
           {
-              targetFeature[i] = (target[i*4+0] & 0xFF)
-                          | ((target[i*4+1] & 0xFF) << 8)
-                          | ((target[i*4+2] & 0xFF) << 16)
-                          | ((target[i*4+3] & 0xFF) << 24);
+              fieldValue = term.field();
+              byte[] target = Base64.decodeBase64(term.bytes().bytes);
+              // calculate the L2 distance using the decoded value
+              int length = target.length/4;
+              targetFeature = new float[length];
+              float distance = 0;
+              for(int i = 0; i < length; i++)
+              {
+                  int j = i*4;
+                  int asInt = (target[j+0] & 0xFF)
+                              | ((target[j+1] & 0xFF) << 8)
+                              | ((target[j+2] & 0xFF) << 16)
+                              | ((target[j+3] & 0xFF) << 24);
+                  targetFeature[i] = Float.intBitsToFloat(asInt);
+              }
           }
       }
   }

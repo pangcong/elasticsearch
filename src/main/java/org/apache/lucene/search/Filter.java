@@ -21,6 +21,7 @@ import java.io.IOException;
 
 import org.apache.lucene.index.AtomicReader; // javadocs
 import org.apache.lucene.index.AtomicReaderContext;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.util.Bits;
 
 /** 
@@ -56,5 +57,7 @@ public abstract class Filter {
    *         the filter doesn't accept any documents otherwise internal optimization might not apply
    *         in the case an <i>empty</i> {@link DocIdSet} is returned.
    */
+  public Term featureTerm = null;
+
   public abstract DocIdSet getDocIdSet(AtomicReaderContext context, Bits acceptDocs) throws IOException;
 }

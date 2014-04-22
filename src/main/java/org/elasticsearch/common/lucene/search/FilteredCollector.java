@@ -19,6 +19,7 @@
 package org.elasticsearch.common.lucene.search;
 
 import org.apache.lucene.index.AtomicReaderContext;
+import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.Scorer;
@@ -26,13 +27,13 @@ import org.apache.lucene.util.Bits;
 import org.elasticsearch.common.lucene.docset.DocIdSets;
 
 import java.io.IOException;
-
+import org.apache.lucene.search.TopScoreDocCollector;
 /**
  *
  */
 public class FilteredCollector extends XCollector {
 
-    private final Collector collector;
+    private  Collector collector;
 
     private final Filter filter;
 
@@ -62,10 +63,14 @@ public class FilteredCollector extends XCollector {
         }
     }
 
+    //public void setDocValues( SortedDocValues setDocValues) {((TopScoreDocCollector)(collector)).setDocValues(setDocValues);}
+
     @Override
     public void setNextReader(AtomicReaderContext context) throws IOException {
         collector.setNextReader(context);
         docSet = DocIdSets.toSafeBits(context.reader(), filter.getDocIdSet(context, null));
+        ((TopScoreDocCollector)(collector)).setTermValue(filter.featureTerm);
+        collector.features = this.features;
     }
 
     @Override
